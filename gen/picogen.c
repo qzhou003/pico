@@ -145,7 +145,7 @@ void print_c_code(const char* name, float rotation)
 		}
 	}
 
-	printf("int %s(float* o, int r, int c, int s, uint8_t* pixels, "
+	printf("int %s(float* o, int r, int c, int s, const uint8_t* pixels, "
 		   "int nrows, int ncols, int ldim)\n", name);
 	printf("{\n");
 
@@ -197,9 +197,6 @@ void print_c_code(const char* name, float rotation)
 	printf("		return -1;\n");
 
 	printf("\n");
-	printf("	pixels = (uint8_t*)vppixels;\n");
-
-	printf("\n");
 	printf("	*o = 0.0f;\n\n");
 	///printf("	pixels = &pixels[r*ldim+c];\n");
 	printf("	for(i=0; i<%d; ++i)\n", ntrees);
@@ -216,7 +213,7 @@ void print_c_code(const char* name, float rotation)
 
 	printf("\n	*o = *o - thresholds[%d];\n", ntrees-1);
 	printf("\n");
-	printf("	return +1;\n");
+	printf("	return 1;\n");
 
 	printf("}\n");
 }
