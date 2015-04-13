@@ -111,10 +111,6 @@ int save_cascade(const char* path)
 	return 1;
 }
 
-/*
-	
-*/
-
 void print_c_code(const char* name, float rotation)
 {
 	int i, j, maxr, maxc;
@@ -133,35 +129,32 @@ void print_c_code(const char* name, float rotation)
 	maxc = 0;
 
 	for(i=0; i<ntrees; ++i)
+	{
 		for(j=0; j<(1<<tdepth)-1; ++j)
 		{
 			int8_t* p = (int8_t*)&tcodes[i][j];
 
-			//
 			rtcodes[i][j][0] = (p[0]*qcos - p[1]*qsin)/q;
 			rtcodes[i][j][1] = (p[0]*qsin + p[1]*qcos)/q;
 
 			rtcodes[i][j][2] = (p[2]*qcos - p[3]*qsin)/q;
 			rtcodes[i][j][3] = (p[2]*qsin + p[3]*qcos)/q;
 
-			//
 			maxr = MAX(maxr, MAX(ABS(rtcodes[i][j][0]), ABS(rtcodes[i][j][2])));
 			maxc = MAX(maxc, MAX(ABS(rtcodes[i][j][1]), ABS(rtcodes[i][j][3])));
 		}
+	}
 
-	//
-	printf("int %s(float* o, int r, int c, int s, void* vppixels, int nrows, int ncols, int ldim)\n", name);
+	printf("int %s(float* o, int r, int c, int s, uint8_t* pixels, "
+		   "int nrows, int ncols, int ldim)\n", name);
 	printf("{\n");
 
-	//
 	printf("	int i, idx, sr, sc;\n");
-	printf("	uint8_t* pixels;\n");
 
-	//
 	printf("\n");
 	printf("	static int16_t tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
 	printf("	{\n");
-	for(i=0; i<ntrees; ++i)
+	for (i=0; i<ntrees; ++i)
 	{
 		printf("		{{0, 0, 0, 0}");
 		for(j=0; j<(1<<tdepth)-1; ++j)
@@ -170,7 +163,6 @@ void print_c_code(const char* name, float rotation)
 	}
 	printf("	};\n");
 
-	//
 	printf("\n");
 	printf("	static float lut[%d][%d] =\n", ntrees, 1<<tdepth);
 	printf("	{\n");
@@ -183,7 +175,6 @@ void print_c_code(const char* name, float rotation)
 	}
 	printf("	};\n");
 
-	//
 	printf("\n");
 	printf("	static float thresholds[%d] =\n", ntrees);
 	printf("	{\n\t\t");
@@ -192,7 +183,6 @@ void print_c_code(const char* name, float rotation)
 	printf("%ff\n", thresholds[ntrees-1]);
 	printf("	};\n");
 
-	//
 	printf("\n");
 	printf("	sr = (int)(%ff*s);\n", tsr);
 	printf("	sc = (int)(%ff*s);\n", tsc);
@@ -209,14 +199,13 @@ void print_c_code(const char* name, float rotation)
 	printf("\n");
 	printf("	pixels = (uint8_t*)vppixels;\n");
 
-	//
 	printf("\n");
 	printf("	*o = 0.0f;\n\n");
 	///printf("	pixels = &pixels[r*ldim+c];\n");
 	printf("	for(i=0; i<%d; ++i)\n", ntrees);
 	printf("	{\n");
 	printf("		idx = 1;\n");
-	for(i=0; i<tdepth; ++i)
+	for (i=0; i<tdepth; ++i)
 	{
 		printf("		idx = 2*idx + (pixels[(r+tcodes[i][idx][0]*sr)/256*ldim + (c+tcodes[i][idx][1]*sc)/256]<=pixels[(r+tcodes[i][idx][2]*sr)/256*ldim + (c+tcodes[i][idx][3]*sc)/256]);\n");
 		///printf("		idx = 2*idx + (pixels[tcodes[i][idx][0]*sr/256*ldim + tcodes[i][idx][1]*sc/256]<=pixels[tcodes[i][idx][2]*sr/256*ldim + tcodes[i][idx][3]*sc/256]);\n");
@@ -229,7 +218,6 @@ void print_c_code(const char* name, float rotation)
 	printf("\n");
 	printf("	return +1;\n");
 
-	//
 	printf("}\n");
 }
 
