@@ -80,7 +80,7 @@ int save_cascade(const char* path)
 
 void print_func_name_cuda(const char *name)
 {
-	printf("__global__ int %s_cuda(float* response, unsigned char *result, "
+	printf("__global__ void %s_cuda(float* response, unsigned char *result, "
 		"int s, const unsigned char* pixels, "
 		"int nrows, int ncols, int ldim, "
 		"float dr, float dc, int res_cols)\n", name);
@@ -122,17 +122,16 @@ void print_c_code(const char* name, float rotation, bool cuda)
 		}
 	}
 
-	if (cuda)
-		print_func_name_cuda(name);
-	else
+	if (!cuda)
+	{
 		print_func_name_c(name);
-	printf("{\n");
+		printf("{\n");
+		printf("	int i, idx;\n");
+		printf("\n");
+	}
 
-	printf("	int i, idx;\n");
-
-	printf("\n");
 	if (cuda)
-		printf("	static short tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
+		printf("	__device__ short tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
 	else
 		printf("	static int16_t tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
 
@@ -147,7 +146,10 @@ void print_c_code(const char* name, float rotation, bool cuda)
 	printf("	};\n");
 
 	printf("\n");
-	printf("	static float lut[%d][%d] =\n", ntrees, 1<<tdepth);
+	if (cuda)
+		printf("	__device__ float lut[%d][%d] =\n", ntrees, 1<<tdepth);
+	else
+		printf("	static float lut[%d][%d] =\n", ntrees, 1<<tdepth);
 	printf("	{\n");
 	for (int i = 0; i < ntrees; ++i)
 	{
@@ -159,12 +161,23 @@ void print_c_code(const char* name, float rotation, bool cuda)
 	printf("	};\n");
 
 	printf("\n");
-	printf("	static float thresholds[%d] =\n", ntrees);
+	if (cuda)
+		printf("	__device__ float thresholds[%d] =\n", ntrees);
+	else
+		printf("	static float thresholds[%d] =\n", ntrees);
 	printf("	{\n\t\t");
 	for (int i = 0; i < ntrees - 1; ++i)
 		printf("%ff, ", thresholds[i]);
 	printf("%ff\n", thresholds[ntrees-1]);
 	printf("	};\n");
+
+	if (cuda)
+	{
+		print_func_name_cuda(name);
+		printf("{\n");
+		printf("	int i, idx;\n");
+		printf("\n");
+	}
 
 	printf("\n");
 	printf("	int sr = (int)(%ff*s);\n", tsr);
