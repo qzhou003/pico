@@ -17,18 +17,16 @@
  *	IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#pragma once
+#ifndef PICORNT_H
+#define PICORNT_H
 
-/*
-	
-*/
+#include <stdint.h>
 
-int find_objects
-		(
-			float rs[], float cs[], float ss[], float qs[], int maxndetections,
-			int (*run_detection_cascade)(float*, int, int, int, void*, int, int, int),
-			void* pixels, int nrows, int ncols, int ldim,
-			float scalefactor, float stridefactor, float minsize, float maxsize
-		);
+int find_objects(float *rs, float *cs, float *ss, float *qs, int maxndetections,
+	int (*run_detection_cascade)(float*, int, int, int, const uint8_t*, int, int, int),
+	const uint8_t *pixels, int nrows, int ncols, int ldim,
+	float scalefactor, float stridefactor, float minsize, float maxsize);
 
-int cluster_detections(float rs[], float cs[], float ss[], float qs[], int n);
+int cluster_detections(float *rs, float *cs, float *ss, float *qs, int n);
+
+#endif  // PICORNT_H
