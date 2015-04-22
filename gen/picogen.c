@@ -19,14 +19,11 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <math.h>
 
 #define MAX(a, b) ((a)>(b)?(a):(b))
 #define ABS(x) ((x)>0?(x):(-(x)))
-
-/*
-	
-*/
 
 float tsr, tsc;
 int tdepth;
@@ -37,22 +34,14 @@ float luts[4096][1024];
 
 float thresholds[4096];
 
-/*
-	
-*/
-
 int load_cascade(const char* path)
 {
 	int i;
-	FILE* file;
+	FILE* file = fopen(path, "rb");
 
-	//
-	file = fopen(path, "rb");
-
-	if(!file)
+	if (!file)
 		return 0;
 
-	//
 	fread(&tsr, sizeof(float), 1, file);
 	fread(&tsc, sizeof(float), 1, file);
 
@@ -60,54 +49,38 @@ int load_cascade(const char* path)
 
 	fread(&ntrees, sizeof(int), 1, file);
 
-	//
 	for(i=0; i<ntrees; ++i)
 	{
-		//
 		fread(&tcodes[i][0], sizeof(int32_t), (1<<tdepth)-1, file);
 		fread(&luts[i][0], sizeof(float), 1<<tdepth, file);
 		fread(&thresholds[i], sizeof(float), 1, file);
 	}
 
-	//
 	fclose(file);
-
-	//
 	return 1;
 }
 
 int save_cascade(const char* path)
 {
 	int i;
-	FILE* file;
+	FILE* file = fopen(path, "wb");
 
-	//
-	file = fopen(path, "wb");
-
-	if(!file)
+	if (!file)
 		return 0;
 
-	//
 	fwrite(&tsr, sizeof(float), 1, file);
 	fwrite(&tsc, sizeof(float), 1, file);
-
 	fwrite(&tdepth, sizeof(int), 1, file);
-
 	fwrite(&ntrees, sizeof(int), 1, file);
 
-	//
-	for(i=0; i<ntrees; ++i)
+	for (i=0; i<ntrees; ++i)
 	{
-		//
 		fwrite(&tcodes[i][0], sizeof(int32_t), (1<<tdepth)-1, file);
 		fwrite(&luts[i][0], sizeof(float), 1<<tdepth, file);
 		fwrite(&thresholds[i], sizeof(float), 1, file);
 	}
 
-	//
 	fclose(file);
-
-	//
 	return 1;
 }
 
@@ -218,19 +191,116 @@ void print_c_code(const char* name, float rotation)
 	printf("}\n");
 }
 
-/*
-	
-*/
+void print_cuda_code(const char* name, float rotation)
+{
+	int i, j, maxr, maxc;
+
+	int qsin, qcos, q;
+
+	static int16_t rtcodes[4096][1024][4];
+
+	// generate rotated binary tests
+	q = (1<<16);
+
+	qsin = (int)( q*sin(rotation) );
+	qcos = (int)( q*cos(rotation) );
+
+	maxr = 0;
+	maxc = 0;
+
+	for(i=0; i<ntrees; ++i)
+	{
+		for(j=0; j<(1<<tdepth)-1; ++j)
+		{
+			int8_t* p = (int8_t*)&tcodes[i][j];
+
+			rtcodes[i][j][0] = (p[0]*qcos - p[1]*qsin)/q;
+			rtcodes[i][j][1] = (p[0]*qsin + p[1]*qcos)/q;
+
+			rtcodes[i][j][2] = (p[2]*qcos - p[3]*qsin)/q;
+			rtcodes[i][j][3] = (p[2]*qsin + p[3]*qcos)/q;
+
+			maxr = MAX(maxr, MAX(ABS(rtcodes[i][j][0]), ABS(rtcodes[i][j][2])));
+			maxc = MAX(maxc, MAX(ABS(rtcodes[i][j][1]), ABS(rtcodes[i][j][3])));
+		}
+	}
+
+	printf("int %s(float* o, int r, int c, int s, const uint8_t* pixels, "
+		   "int nrows, int ncols, int ldim)\n", name);
+	printf("{\n");
+
+	printf("	int i, idx, sr, sc;\n");
+
+	printf("\n");
+	printf("	static int16_t tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
+	printf("	{\n");
+	for (i=0; i<ntrees; ++i)
+	{
+		printf("		{{0, 0, 0, 0}");
+		for(j=0; j<(1<<tdepth)-1; ++j)
+			printf(", {%d, %d, %d, %d}", rtcodes[i][j][0], rtcodes[i][j][1], rtcodes[i][j][2], rtcodes[i][j][3]);
+		printf("},\n");
+	}
+	printf("	};\n");
+
+	printf("\n");
+	printf("	static float lut[%d][%d] =\n", ntrees, 1<<tdepth);
+	printf("	{\n");
+	for(i=0; i<ntrees; ++i)
+	{
+		printf("		{");
+		for(j=0; j<(1<<tdepth)-1; ++j)
+			printf("%ff, ", luts[i][j]);
+		printf("%ff},\n", luts[i][(1<<tdepth)-1]);
+	}
+	printf("	};\n");
+
+	printf("\n");
+	printf("	static float thresholds[%d] =\n", ntrees);
+	printf("	{\n\t\t");
+	for(i=0; i<ntrees-1; ++i)
+		printf("%ff, ", thresholds[i]);
+	printf("%ff\n", thresholds[ntrees-1]);
+	printf("	};\n");
+
+	printf("\n");
+	printf("	sr = (int)(%ff*s);\n", tsr);
+	printf("	sc = (int)(%ff*s);\n", tsc);
+
+	printf("\n");
+	printf("	r = r*256;\n");
+	printf("	c = c*256;\n");
+
+	// generate the code that checks image boundaries
+	printf("\n");
+	printf("	if( (r+%d*sr)/256>=nrows || (r-%d*sr)/256<0 || (c+%d*sc)/256>=ncols || (c-%d*sc)/256<0 )\n", maxr, maxr, maxc, maxc);
+	printf("		return -1;\n");
+
+	printf("\n");
+	printf("	*o = 0.0f;\n\n");
+	///printf("	pixels = &pixels[r*ldim+c];\n");
+	printf("	for(i=0; i<%d; ++i)\n", ntrees);
+	printf("	{\n");
+	printf("		idx = 1;\n");
+	for (i=0; i<tdepth; ++i)
+	{
+		printf("		idx = 2*idx + (pixels[(r+tcodes[i][idx][0]*sr)/256*ldim + (c+tcodes[i][idx][1]*sc)/256]<=pixels[(r+tcodes[i][idx][2]*sr)/256*ldim + (c+tcodes[i][idx][3]*sc)/256]);\n");
+		///printf("		idx = 2*idx + (pixels[tcodes[i][idx][0]*sr/256*ldim + tcodes[i][idx][1]*sc/256]<=pixels[tcodes[i][idx][2]*sr/256*ldim + tcodes[i][idx][3]*sc/256]);\n");
+	}
+	printf("\n		*o = *o + lut[i][idx-%d];\n\n", 1<<tdepth);
+	printf("		if(*o<=thresholds[i])\n\t\t\treturn -1;\n");
+	printf("	}\n");
+
+	printf("\n	*o = *o - thresholds[%d];\n", ntrees-1);
+	printf("\n");
+	printf("	return 1;\n");
+
+	printf("}\n");
+}
 
 int main(int argc, char* argv[])
 {
-	//
-	if(argc == 3)
-	{
-		load_cascade(argv[1]);
-		print_c_code(argv[2], 0.0f);
-	}
-	else if(argc == 4)
+	if (argc == 4)
 	{
 		float rotation;
 
@@ -238,12 +308,16 @@ int main(int argc, char* argv[])
 		sscanf(argv[2], "%f", &rotation);
 		print_c_code(argv[3], rotation);
 	}
+	else if (argc == 5 && !strcmp(argv[4], "--cuda"))
+	{
+		print_cuda_code(argv[3], rotation);
+	}
 	else
 	{
-		printf("* specify arguments: <cascade> <in-plane rotation> <detection function name>\n");
+		printf("Usage: %s <cascade> <in-plane rotation> "
+			   "<detection function name> [--cuda]\n", argv[0]);
 		return 0;
 	}
 
-	//
 	return 0;
 }
