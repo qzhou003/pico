@@ -288,6 +288,7 @@ void print_cuda_code(const char* name, float rotation)
 int main(int argc, char* argv[])
 {
 	float rotation = 0;
+	bool error = false;
 
 	if (argc < 4)
 		error = true;
@@ -297,12 +298,15 @@ int main(int argc, char* argv[])
 		sscanf(argv[2], "%f", &rotation);
 	}
 
-	if (argc == 4)
-		print_c_code(argv[3], rotation);
-	else if (argc == 5 && !strcmp(argv[4], "--cuda"))
-		print_cuda_code(argv[3], rotation);
-	else
-		error = true;
+	if (!error)
+	{
+		if (argc == 4)
+			print_c_code(argv[3], rotation);
+		else if (argc == 5 && !strcmp(argv[4], "--cuda"))
+			print_cuda_code(argv[3], rotation);
+		else
+			error = true;
+	}
 
 	if (error)
 	{
