@@ -23,7 +23,7 @@
 #include <stdint.h>
 
 int find_objects(float *rs, float *cs, float *ss, float *qs, int maxndetections,
-	int (*run_detection_cascade)(float*, int, int, int, const uint8_t*, int, int, int),
+	int (*detection_func)(float*, int, int, int, const uint8_t*, int, int, int),
 	const uint8_t *pixels, int nrows, int ncols, int ldim,
 	float scalefactor, float stridefactor, float minsize, float maxsize);
 

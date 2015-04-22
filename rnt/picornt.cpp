@@ -22,9 +22,11 @@
 
 #include "picornt.h"
 
+#include <cstring>
+
 int find_objects(
 	float *rs, float *cs, float *ss, float *qs, int maxndetections,
-	int (*run_detection_cascade)(float*, int, int, int, const uint8_t*, int, int, int),
+	int (*detection_func)(float*, int, int, int, const uint8_t*, int, int, int),
 	const uint8_t* pixels, int nrows, int ncols, int ldim,
 	float scalefactor, float stridefactor, float minsize, float maxsize)
 {
@@ -34,30 +36,28 @@ int find_objects(
 	ndetections = 0;
 	s = minsize;
 
-	while(s<=maxsize)
+	while (s<=maxsize)
 	{
-		float r, c, dr, dc;
-
+		float dr, dc;
 		dr = dc = MAX(stridefactor*s, 1.0f);
 
-		for(r=s/2+1; r<=nrows-s/2-1; r+=dr)
-			for(c=s/2+1; c<=ncols-s/2-1; c+=dc)
+		for (float r=s/2+1; r<=nrows-s/2-1; r+=dr)
+		{
+			for (float c=s/2+1; c<=ncols-s/2-1; c+=dc)
 			{
 				float q;
+				if (detection_func(&q, r, c, s, pixels, nrows, ncols, ldim) != 1
+						|| ndetections >= maxndetections)
+					continue;
 
-				if(run_detection_cascade(&q, r, c, s, pixels, nrows, ncols, ldim) == 1)
-				{
-					if(ndetections < maxndetections)
-					{
-						qs[ndetections] = q;
-						rs[ndetections] = r;
-						cs[ndetections] = c;
-						ss[ndetections] = s;
+				qs[ndetections] = q;
+				rs[ndetections] = r;
+				cs[ndetections] = c;
+				ss[ndetections] = s;
 
-						++ndetections;
-					}
-				}
+				++ndetections;
 			}
+		}
 
 		s = scalefactor*s;
 	}
@@ -67,84 +67,71 @@ int find_objects(
 
 float get_overlap(float r1, float c1, float s1, float r2, float c2, float s2)
 {
-	float overr, overc;
-
-	overr = MAX(0, MIN(r1+s1/2, r2+s2/2) - MAX(r1-s1/2, r2-s2/2));
-	overc = MAX(0, MIN(c1+s1/2, c2+s2/2) - MAX(c1-s1/2, c2-s2/2));
+	float overr = MAX(0, MIN(r1+s1/2, r2+s2/2) - MAX(r1-s1/2, r2-s2/2));
+	float overc = MAX(0, MIN(c1+s1/2, c2+s2/2) - MAX(c1-s1/2, c2-s2/2));
 
 	return overr*overc/(s1*s1+s2*s2-overr*overc);
 }
 
 void ccdfs(int a[], int i, float rs[], float cs[], float ss[], int n)
 {
-	int j;
-
-	for(j=0; j<n; ++j)
-		if(a[j]==0 && get_overlap(rs[i], cs[i], ss[i], rs[j], cs[j], ss[j])>0.3f)
+	for (int j = 0; j < n; ++j)
+	{
+		if (a[j] == 0 && get_overlap(rs[i], cs[i], ss[i], rs[j], cs[j], ss[j])>0.3f)
 		{
 			a[j] = a[i];
 
 			ccdfs(a, j, rs, cs, ss, n);
 		}
+	}
 }
 
 int find_connected_components(int a[], float rs[], float cs[], float ss[], int n)
 {
-	int i, ncc, cc;
-
-	if(!n)
+	if (!n)
 		return 0;
 
-	for(i=0; i<n; ++i)
-		a[i] = 0;
+	memset(a, 0, n * sizeof(float));
 
-	ncc = 0;
-	cc = 1;
-
-	for(i=0; i<n; ++i)
-		if(a[i] == 0)
-		{
-			a[i] = cc;
-
-			ccdfs(a, i, rs, cs, ss, n);
-
-			++ncc;
-			++cc;
-		}
+	int ncc = 0;
+	int cc = 1;
+	for (int i = 0; i < n; ++i)
+	{
+		if (a[i] != 0)
+			continue;
+		a[i] = cc;
+		ccdfs(a, i, rs, cs, ss, n);
+		++ncc;
+		++cc;
+	}
 
 	return ncc;
 }
 
 int cluster_detections(float *rs, float *cs, float *ss, float *qs, int n)
 {
-	int idx, ncc, cc;
 	int a[4096];
-
-	ncc = find_connected_components(a, rs, cs, ss, n);
-
-	if(!ncc)
+	int ncc = find_connected_components(a, rs, cs, ss, n);
+	if (!ncc)
 		return 0;
 
-	idx = 0;
-
-	for(cc=1; cc<=ncc; ++cc)
+	int idx = 0;
+	for (int cc = 1; cc <= ncc; ++cc)
 	{
-		int i, k;
-
 		float sumqs=0.0f, sumrs=0.0f, sumcs=0.0f, sumss=0.0f;
 
-		k = 0;
+		int k = 0;
+		for (int i = 0; i < n; ++i)
+		{
+			if (a[i] != cc)
+				continue;
 
-		for(i=0; i<n; ++i)
-			if(a[i] == cc)
-			{
-				sumqs += qs[i];
-				sumrs += rs[i];
-				sumcs += cs[i];
-				sumss += ss[i];
-
-				++k;
-			}
+			sumqs += qs[i];
+			sumrs += rs[i];
+			sumcs += cs[i];
+			sumss += ss[i];
+			++k;
+		}
 
 		qs[idx] = sumqs;  // accumulated confidence measure
 
