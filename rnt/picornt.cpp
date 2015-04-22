@@ -54,7 +54,6 @@ int find_objects(
 				rs[ndetections] = r;
 				cs[ndetections] = c;
 				ss[ndetections] = s;
-
 				++ndetections;
 			}
 		}
