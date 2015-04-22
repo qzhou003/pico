@@ -36,20 +36,16 @@ float thresholds[4096];
 
 int load_cascade(const char* path)
 {
-	int i;
 	FILE* file = fopen(path, "rb");
-
 	if (!file)
 		return 0;
 
 	fread(&tsr, sizeof(float), 1, file);
 	fread(&tsc, sizeof(float), 1, file);
-
 	fread(&tdepth, sizeof(int), 1, file);
-
 	fread(&ntrees, sizeof(int), 1, file);
 
-	for(i=0; i<ntrees; ++i)
+	for (int i = 0; i < ntrees; ++i)
 	{
 		fread(&tcodes[i][0], sizeof(int32_t), (1<<tdepth)-1, file);
 		fread(&luts[i][0], sizeof(float), 1<<tdepth, file);
@@ -62,9 +58,7 @@ int load_cascade(const char* path)
 
 int save_cascade(const char* path)
 {
-	int i;
 	FILE* file = fopen(path, "wb");
-
 	if (!file)
 		return 0;
 
@@ -73,7 +67,7 @@ int save_cascade(const char* path)
 	fwrite(&tdepth, sizeof(int), 1, file);
 	fwrite(&ntrees, sizeof(int), 1, file);
 
-	for (i=0; i<ntrees; ++i)
+	for (int i = 0; i < ntrees; ++i)
 	{
 		fwrite(&tcodes[i][0], sizeof(int32_t), (1<<tdepth)-1, file);
 		fwrite(&luts[i][0], sizeof(float), 1<<tdepth, file);
@@ -86,24 +80,20 @@ int save_cascade(const char* path)
 
 void print_c_code(const char* name, float rotation)
 {
-	int i, j, maxr, maxc;
-
-	int qsin, qcos, q;
-
 	static int16_t rtcodes[4096][1024][4];
 
 	// generate rotated binary tests
-	q = (1<<16);
+	int q = (1<<16);
 
-	qsin = (int)( q*sin(rotation) );
-	qcos = (int)( q*cos(rotation) );
+	int qsin = (int)( q*sin(rotation) );
+	int qcos = (int)( q*cos(rotation) );
 
-	maxr = 0;
-	maxc = 0;
+	int maxr = 0;
+	int maxc = 0;
 
-	for(i=0; i<ntrees; ++i)
+	for (int i = 0; i < ntrees; ++i)
 	{
-		for(j=0; j<(1<<tdepth)-1; ++j)
+		for (int j = 0; j < (1<<tdepth) - 1; ++j)
 		{
 			int8_t* p = (int8_t*)&tcodes[i][j];
 
@@ -127,10 +117,10 @@ void print_c_code(const char* name, float rotation)
 	printf("\n");
 	printf("	static int16_t tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
 	printf("	{\n");
-	for (i=0; i<ntrees; ++i)
+	for (int i = 0; i < ntrees; ++i)
 	{
 		printf("		{{0, 0, 0, 0}");
-		for(j=0; j<(1<<tdepth)-1; ++j)
+		for (int j = 0; j < (1<<tdepth) - 1; ++j)
 			printf(", {%d, %d, %d, %d}", rtcodes[i][j][0], rtcodes[i][j][1], rtcodes[i][j][2], rtcodes[i][j][3]);
 		printf("},\n");
 	}
@@ -139,10 +129,10 @@ void print_c_code(const char* name, float rotation)
 	printf("\n");
 	printf("	static float lut[%d][%d] =\n", ntrees, 1<<tdepth);
 	printf("	{\n");
-	for(i=0; i<ntrees; ++i)
+	for (int i = 0; i < ntrees; ++i)
 	{
 		printf("		{");
-		for(j=0; j<(1<<tdepth)-1; ++j)
+		for (int j = 0; j < (1<<tdepth) - 1; ++j)
 			printf("%ff, ", luts[i][j]);
 		printf("%ff},\n", luts[i][(1<<tdepth)-1]);
 	}
@@ -151,7 +141,7 @@ void print_c_code(const char* name, float rotation)
 	printf("\n");
 	printf("	static float thresholds[%d] =\n", ntrees);
 	printf("	{\n\t\t");
-	for(i=0; i<ntrees-1; ++i)
+	for (int i = 0; i < ntrees - 1; ++i)
 		printf("%ff, ", thresholds[i]);
 	printf("%ff\n", thresholds[ntrees-1]);
 	printf("	};\n");
@@ -175,7 +165,7 @@ void print_c_code(const char* name, float rotation)
 	printf("	for(i=0; i<%d; ++i)\n", ntrees);
 	printf("	{\n");
 	printf("		idx = 1;\n");
-	for (i=0; i<tdepth; ++i)
+	for (int i = 0; i < tdepth; ++i)
 	{
 		printf("		idx = 2*idx + (pixels[(r+tcodes[i][idx][0]*sr)/256*ldim + (c+tcodes[i][idx][1]*sc)/256]<=pixels[(r+tcodes[i][idx][2]*sr)/256*ldim + (c+tcodes[i][idx][3]*sc)/256]);\n");
 		///printf("		idx = 2*idx + (pixels[tcodes[i][idx][0]*sr/256*ldim + tcodes[i][idx][1]*sc/256]<=pixels[tcodes[i][idx][2]*sr/256*ldim + tcodes[i][idx][3]*sc/256]);\n");
@@ -184,7 +174,7 @@ void print_c_code(const char* name, float rotation)
 	printf("		if(*o<=thresholds[i])\n\t\t\treturn -1;\n");
 	printf("	}\n");
 
-	printf("\n	*o = *o - thresholds[%d];\n", ntrees-1);
+	printf("\n	*o = *o - thresholds[%d];\n", ntrees - 1);
 	printf("\n");
 	printf("	return 1;\n");
 
@@ -193,24 +183,20 @@ void print_c_code(const char* name, float rotation)
 
 void print_cuda_code(const char* name, float rotation)
 {
-	int i, j, maxr, maxc;
-
-	int qsin, qcos, q;
-
 	static int16_t rtcodes[4096][1024][4];
 
 	// generate rotated binary tests
-	q = (1<<16);
+	int q = (1<<16);
 
-	qsin = (int)( q*sin(rotation) );
-	qcos = (int)( q*cos(rotation) );
+	int qsin = (int)( q*sin(rotation) );
+	int qcos = (int)( q*cos(rotation) );
 
-	maxr = 0;
-	maxc = 0;
+	int maxr = 0;
+	int maxc = 0;
 
-	for(i=0; i<ntrees; ++i)
+	for (int i = 0; i < ntrees; ++i)
 	{
-		for(j=0; j<(1<<tdepth)-1; ++j)
+		for (int j = 0; j < (1<<tdepth) - 1; ++j)
 		{
 			int8_t* p = (int8_t*)&tcodes[i][j];
 
@@ -225,19 +211,20 @@ void print_cuda_code(const char* name, float rotation)
 		}
 	}
 
-	printf("int %s(float* o, int r, int c, int s, const uint8_t* pixels, "
-		   "int nrows, int ncols, int ldim)\n", name);
+	printf("__global__ int %s_cuda(float* o, int r, int c, int s, "
+		"const unsigned char* pixels, "
+		"int nrows, int ncols, int ldim)\n", name);
 	printf("{\n");
 
 	printf("	int i, idx, sr, sc;\n");
 
 	printf("\n");
-	printf("	static int16_t tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
+	printf("	static short tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
 	printf("	{\n");
-	for (i=0; i<ntrees; ++i)
+	for (int i = 0; i < ntrees; ++i)
 	{
 		printf("		{{0, 0, 0, 0}");
-		for(j=0; j<(1<<tdepth)-1; ++j)
+		for (int j = 0; j < (1<<tdepth) - 1; ++j)
 			printf(", {%d, %d, %d, %d}", rtcodes[i][j][0], rtcodes[i][j][1], rtcodes[i][j][2], rtcodes[i][j][3]);
 		printf("},\n");
 	}
@@ -246,10 +233,10 @@ void print_cuda_code(const char* name, float rotation)
 	printf("\n");
 	printf("	static float lut[%d][%d] =\n", ntrees, 1<<tdepth);
 	printf("	{\n");
-	for(i=0; i<ntrees; ++i)
+	for (int i = 0; i < ntrees; ++i)
 	{
 		printf("		{");
-		for(j=0; j<(1<<tdepth)-1; ++j)
+		for (int j = 0; j < (1<<tdepth) - 1; ++j)
 			printf("%ff, ", luts[i][j]);
 		printf("%ff},\n", luts[i][(1<<tdepth)-1]);
 	}
@@ -258,7 +245,7 @@ void print_cuda_code(const char* name, float rotation)
 	printf("\n");
 	printf("	static float thresholds[%d] =\n", ntrees);
 	printf("	{\n\t\t");
-	for(i=0; i<ntrees-1; ++i)
+	for (int i = 0; i < ntrees - 1; ++i)
 		printf("%ff, ", thresholds[i]);
 	printf("%ff\n", thresholds[ntrees-1]);
 	printf("	};\n");
@@ -282,7 +269,7 @@ void print_cuda_code(const char* name, float rotation)
 	printf("	for(i=0; i<%d; ++i)\n", ntrees);
 	printf("	{\n");
 	printf("		idx = 1;\n");
-	for (i=0; i<tdepth; ++i)
+	for (int i = 0; i < tdepth; ++i)
 	{
 		printf("		idx = 2*idx + (pixels[(r+tcodes[i][idx][0]*sr)/256*ldim + (c+tcodes[i][idx][1]*sc)/256]<=pixels[(r+tcodes[i][idx][2]*sr)/256*ldim + (c+tcodes[i][idx][3]*sc)/256]);\n");
 		///printf("		idx = 2*idx + (pixels[tcodes[i][idx][0]*sr/256*ldim + tcodes[i][idx][1]*sc/256]<=pixels[tcodes[i][idx][2]*sr/256*ldim + tcodes[i][idx][3]*sc/256]);\n");
@@ -291,7 +278,7 @@ void print_cuda_code(const char* name, float rotation)
 	printf("		if(*o<=thresholds[i])\n\t\t\treturn -1;\n");
 	printf("	}\n");
 
-	printf("\n	*o = *o - thresholds[%d];\n", ntrees-1);
+	printf("\n	*o = *o - thresholds[%d];\n", ntrees - 1);
 	printf("\n");
 	printf("	return 1;\n");
 
@@ -300,19 +287,24 @@ void print_cuda_code(const char* name, float rotation)
 
 int main(int argc, char* argv[])
 {
-	if (argc == 4)
-	{
-		float rotation;
+	float rotation = 0;
 
+	if (argc < 4)
+		error = true;
+	else
+	{
 		load_cascade(argv[1]);
 		sscanf(argv[2], "%f", &rotation);
+	}
+
+	if (argc == 4)
 		print_c_code(argv[3], rotation);
-	}
 	else if (argc == 5 && !strcmp(argv[4], "--cuda"))
-	{
 		print_cuda_code(argv[3], rotation);
-	}
 	else
+		error = true;
+
+	if (error)
 	{
 		printf("Usage: %s <cascade> <in-plane rotation> "
 			   "<detection function name> [--cuda]\n", argv[0]);
