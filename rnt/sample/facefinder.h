@@ -1,7 +1,7 @@
-int run_facefinder(float* o, int r, int c, int s, void* vppixels, int nrows, int ncols, int ldim)
+int run_facefinder(float* o, int r, int c, int s, const uint8_t *pixels,
+				   int nrows, int ncols, int ldim)
 {
 	int i, idx, sr, sc;
-	uint8_t* pixels;
 
 	static int16_t tcodes[468][64][4] =
 	{
@@ -960,8 +960,6 @@ int run_facefinder(float* o, int r, int c, int s, void* vppixels, int nrows, int
 
 	if( (r+128*sr)/256>=nrows || (r-128*sr)/256<0 || (c+128*sc)/256>=ncols || (c-128*sc)/256<0 )
 		return -1;
-
-	pixels = (uint8_t*)vppixels;
 
 	*o = 0.0f;
 
