@@ -154,7 +154,7 @@ int find_faces_cpu(
 {
 	return find_objects(
 		rs, cs, ss, qs, maxndetections,
-		detect_frontal_faces,
+		facedet,
 		pixels, nrows, ncols, ldim,
 		scalefactor, stridefactor, minsize, maxsize);)
 }
