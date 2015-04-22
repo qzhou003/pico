@@ -80,9 +80,10 @@ int save_cascade(const char* path)
 
 void print_func_name_cuda(const char *name)
 {
-	printf("__global__ int %s_cuda(float* o, int r, int c, int s, "
-		"const unsigned char* pixels, "
-		"int nrows, int ncols, int ldim)\n", name);
+	printf("__global__ int %s_cuda(float* response, unsigned char *result, "
+		"int s, const unsigned char* pixels, "
+		"int nrows, int ncols, int ldim, "
+		"float dr, float dc, int res_cols)\n", name);
 }
 
 void print_func_name_c(const char *name)
@@ -127,7 +128,7 @@ void print_c_code(const char* name, float rotation, bool cuda)
 		print_func_name_c(name);
 	printf("{\n");
 
-	printf("	int i, idx, sr, sc;\n");
+	printf("	int i, idx;\n");
 
 	printf("\n");
 	if (cuda)
@@ -166,22 +167,46 @@ void print_c_code(const char* name, float rotation, bool cuda)
 	printf("	};\n");
 
 	printf("\n");
-	printf("	sr = (int)(%ff*s);\n", tsr);
-	printf("	sc = (int)(%ff*s);\n", tsc);
+	printf("	int sr = (int)(%ff*s);\n", tsr);
+	printf("	int sc = (int)(%ff*s);\n", tsc);
 
 	printf("\n");
-	printf("	r = r*256;\n");
-	printf("	c = c*256;\n");
+	if (cuda)
+	{
+		printf("	int px = blockIdx.x * blockDim.x + threadIdx.x;\n");
+		printf("	int py = blockIdx.y * blockDim.y + threadIdx.y;\n");
+		printf("	int r = int(s / 2 + 1 + py * dr) * 256;\n");
+		printf("	int c = int(s / 2 + 1 + px * dc) * 256;\n");
+		printf("	int res_stride = py * res_cols + px;\n");
+	}
+	else
+	{
+		printf("	r *= 256;\n");
+		printf("	c *= 256;\n");
+	}
 
-	// generate the code that checks image boundaries
+	// check image boundaries
 	printf("\n");
-	printf("	if( (r+%d*sr)/256>=nrows || (r-%d*sr)/256<0 || (c+%d*sc)/256>=ncols || (c-%d*sc)/256<0 )\n", maxr, maxr, maxc, maxc);
-	printf("		return -1;\n");
+	printf("	if( (r+%d*sr)/256>=nrows || (r-%d*sr)/256<0 || "
+		   "(c+%d*sc)/256>=ncols || (c-%d*sc)/256<0 )\n",
+		   maxr, maxr, maxc, maxc);
+	if (cuda)
+	{
+		printf("	{\n");
+		printf("		result[res_stride] = 0;\n");
+		printf("		return;\n");
+		printf("	}\n");
+	}
+	else
+		printf("		return -1;\n");
 
 	printf("\n");
+	if (cuda)
+		printf("	float *o = response + res_stride;\n\n");
+
 	printf("	*o = 0.0f;\n\n");
-	///printf("	pixels = &pixels[r*ldim+c];\n");
-	printf("	for(i=0; i<%d; ++i)\n", ntrees);
+	// printf("	pixels = &pixels[r*ldim+c];\n");
+	printf("	for (i = 0; i < %d; ++i)\n", ntrees);
 	printf("	{\n");
 	printf("		idx = 1;\n");
 	for (int i = 0; i < tdepth; ++i)
@@ -189,13 +214,25 @@ void print_c_code(const char* name, float rotation, bool cuda)
 		printf("		idx = 2*idx + (pixels[(r+tcodes[i][idx][0]*sr)/256*ldim + (c+tcodes[i][idx][1]*sc)/256]<=pixels[(r+tcodes[i][idx][2]*sr)/256*ldim + (c+tcodes[i][idx][3]*sc)/256]);\n");
 		///printf("		idx = 2*idx + (pixels[tcodes[i][idx][0]*sr/256*ldim + tcodes[i][idx][1]*sc/256]<=pixels[tcodes[i][idx][2]*sr/256*ldim + tcodes[i][idx][3]*sc/256]);\n");
 	}
-	printf("\n		*o = *o + lut[i][idx-%d];\n\n", 1<<tdepth);
-	printf("		if(*o<=thresholds[i])\n\t\t\treturn -1;\n");
+	printf("\n		*o += lut[i][idx-%d];\n\n", 1<<tdepth);
+	printf("		if (*o <= thresholds[i])\n");
+	if (cuda)
+	{
+		printf("		{\n");
+		printf("			result[res_stride] = 0;\n");
+		printf("			return;\n");
+		printf("		}\n");
+	}
+	else
+		printf("		return -1;\n");
 	printf("	}\n");
 
-	printf("\n	*o = *o - thresholds[%d];\n", ntrees - 1);
+	printf("\n	*o -= thresholds[%d];\n", ntrees - 1);
 	printf("\n");
-	printf("	return 1;\n");
+	if (cuda)
+		printf("	result[res_stride] = 1;\n");
+	else
+		printf("	return 1;\n");
 
 	printf("}\n");
 }

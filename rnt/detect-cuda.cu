@@ -22,13 +22,13 @@ int find_faces_cuda(
 	float scalefactor, float stridefactor, float minsize, float maxsize)
 {
 	dim3 block(16, 16);
-	dim3 grid = compute_grid(block, ncols, nrows);
 
 	for (float s = minsize; s <= maxsize; s *= scalefactor)
 	{
 		float dr = std::max(stridefactor * s, 1.0f);
 		float dc = dr;
 
+		dim3 grid = compute_grid(block, ncols, nrows);
 		facedet_cuda<<<grid, block>>>(
 			rs, cs, ss, qs, pixels, nrows, ncols, ldim, dr, dc);
 	}
