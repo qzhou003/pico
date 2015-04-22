@@ -21,6 +21,8 @@
 #define MIN(a, b) ((a)<(b)?(a):(b))
 
 #include "picornt.h"
+#include "detect-cuda.h"
+#include "cascades/face-cpu.h"
 
 #include <cstring>
 
@@ -143,4 +145,31 @@ int cluster_detections(float *rs, float *cs, float *ss, float *qs, int n)
 	}
 
 	return idx;
+}
+
+int find_faces_cpu(
+	float *rs, float *cs, float *ss, float *qs, int maxndetections,
+	const uint8_t *pixels, int nrows, int ncols, int ldim,
+	float scalefactor, float stridefactor, float minsize, float maxsize)
+{
+	return find_objects(
+		rs, cs, ss, qs, maxndetections,
+		detect_frontal_faces,
+		pixels, nrows, ncols, ldim,
+		scalefactor, stridefactor, minsize, maxsize);)
+}
+
+int find_faces(bool use_cuda,
+	float *rs, float *cs, float *ss, float *qs, int maxndetections,
+	const uint8_t *pixels, int nrows, int ncols, int ldim,
+	float scalefactor, float stridefactor, float minsize, float maxsize)
+{
+	if (use_cuda)
+		return find_faces_cuda(rs, cs, ss, qs, maxndetections,
+			pixels, nrows, ncols, ldim,
+			scalefactor, stridefactor, minsize, maxsize);
+	else
+		return find_faces_cpu(rs, cs, ss, qs, maxndetections,
+			pixels, nrows, ncols, ldim,
+			scalefactor, stridefactor, minsize, maxsize);
 }

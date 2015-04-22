@@ -78,148 +78,63 @@ int save_cascade(const char* path)
 	return 1;
 }
 
-void print_c_code(const char* name, float rotation)
+void print_func_name_cuda(const char *name)
 {
-	static int16_t rtcodes[4096][1024][4];
-
-	// generate rotated binary tests
-	int q = (1<<16);
-
-	int qsin = (int)( q*sin(rotation) );
-	int qcos = (int)( q*cos(rotation) );
-
-	int maxr = 0;
-	int maxc = 0;
-
-	for (int i = 0; i < ntrees; ++i)
-	{
-		for (int j = 0; j < (1<<tdepth) - 1; ++j)
-		{
-			int8_t* p = (int8_t*)&tcodes[i][j];
-
-			rtcodes[i][j][0] = (p[0]*qcos - p[1]*qsin)/q;
-			rtcodes[i][j][1] = (p[0]*qsin + p[1]*qcos)/q;
-
-			rtcodes[i][j][2] = (p[2]*qcos - p[3]*qsin)/q;
-			rtcodes[i][j][3] = (p[2]*qsin + p[3]*qcos)/q;
-
-			maxr = MAX(maxr, MAX(ABS(rtcodes[i][j][0]), ABS(rtcodes[i][j][2])));
-			maxc = MAX(maxc, MAX(ABS(rtcodes[i][j][1]), ABS(rtcodes[i][j][3])));
-		}
-	}
-
-	printf("int %s(float* o, int r, int c, int s, const uint8_t* pixels, "
-		   "int nrows, int ncols, int ldim)\n", name);
-	printf("{\n");
-
-	printf("	int i, idx, sr, sc;\n");
-
-	printf("\n");
-	printf("	static int16_t tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
-	printf("	{\n");
-	for (int i = 0; i < ntrees; ++i)
-	{
-		printf("		{{0, 0, 0, 0}");
-		for (int j = 0; j < (1<<tdepth) - 1; ++j)
-			printf(", {%d, %d, %d, %d}", rtcodes[i][j][0], rtcodes[i][j][1], rtcodes[i][j][2], rtcodes[i][j][3]);
-		printf("},\n");
-	}
-	printf("	};\n");
-
-	printf("\n");
-	printf("	static float lut[%d][%d] =\n", ntrees, 1<<tdepth);
-	printf("	{\n");
-	for (int i = 0; i < ntrees; ++i)
-	{
-		printf("		{");
-		for (int j = 0; j < (1<<tdepth) - 1; ++j)
-			printf("%ff, ", luts[i][j]);
-		printf("%ff},\n", luts[i][(1<<tdepth)-1]);
-	}
-	printf("	};\n");
-
-	printf("\n");
-	printf("	static float thresholds[%d] =\n", ntrees);
-	printf("	{\n\t\t");
-	for (int i = 0; i < ntrees - 1; ++i)
-		printf("%ff, ", thresholds[i]);
-	printf("%ff\n", thresholds[ntrees-1]);
-	printf("	};\n");
-
-	printf("\n");
-	printf("	sr = (int)(%ff*s);\n", tsr);
-	printf("	sc = (int)(%ff*s);\n", tsc);
-
-	printf("\n");
-	printf("	r = r*256;\n");
-	printf("	c = c*256;\n");
-
-	// generate the code that checks image boundaries
-	printf("\n");
-	printf("	if( (r+%d*sr)/256>=nrows || (r-%d*sr)/256<0 || (c+%d*sc)/256>=ncols || (c-%d*sc)/256<0 )\n", maxr, maxr, maxc, maxc);
-	printf("		return -1;\n");
-
-	printf("\n");
-	printf("	*o = 0.0f;\n\n");
-	///printf("	pixels = &pixels[r*ldim+c];\n");
-	printf("	for(i=0; i<%d; ++i)\n", ntrees);
-	printf("	{\n");
-	printf("		idx = 1;\n");
-	for (int i = 0; i < tdepth; ++i)
-	{
-		printf("		idx = 2*idx + (pixels[(r+tcodes[i][idx][0]*sr)/256*ldim + (c+tcodes[i][idx][1]*sc)/256]<=pixels[(r+tcodes[i][idx][2]*sr)/256*ldim + (c+tcodes[i][idx][3]*sc)/256]);\n");
-		///printf("		idx = 2*idx + (pixels[tcodes[i][idx][0]*sr/256*ldim + tcodes[i][idx][1]*sc/256]<=pixels[tcodes[i][idx][2]*sr/256*ldim + tcodes[i][idx][3]*sc/256]);\n");
-	}
-	printf("\n		*o = *o + lut[i][idx-%d];\n\n", 1<<tdepth);
-	printf("		if(*o<=thresholds[i])\n\t\t\treturn -1;\n");
-	printf("	}\n");
-
-	printf("\n	*o = *o - thresholds[%d];\n", ntrees - 1);
-	printf("\n");
-	printf("	return 1;\n");
-
-	printf("}\n");
-}
-
-void print_cuda_code(const char* name, float rotation)
-{
-	static int16_t rtcodes[4096][1024][4];
-
-	// generate rotated binary tests
-	int q = (1<<16);
-
-	int qsin = (int)( q*sin(rotation) );
-	int qcos = (int)( q*cos(rotation) );
-
-	int maxr = 0;
-	int maxc = 0;
-
-	for (int i = 0; i < ntrees; ++i)
-	{
-		for (int j = 0; j < (1<<tdepth) - 1; ++j)
-		{
-			int8_t* p = (int8_t*)&tcodes[i][j];
-
-			rtcodes[i][j][0] = (p[0]*qcos - p[1]*qsin)/q;
-			rtcodes[i][j][1] = (p[0]*qsin + p[1]*qcos)/q;
-
-			rtcodes[i][j][2] = (p[2]*qcos - p[3]*qsin)/q;
-			rtcodes[i][j][3] = (p[2]*qsin + p[3]*qcos)/q;
-
-			maxr = MAX(maxr, MAX(ABS(rtcodes[i][j][0]), ABS(rtcodes[i][j][2])));
-			maxc = MAX(maxc, MAX(ABS(rtcodes[i][j][1]), ABS(rtcodes[i][j][3])));
-		}
-	}
-
 	printf("__global__ int %s_cuda(float* o, int r, int c, int s, "
 		"const unsigned char* pixels, "
 		"int nrows, int ncols, int ldim)\n", name);
+}
+
+void print_func_name_c(const char *name)
+{
+	printf("int %s(float* o, int r, int c, int s, const uint8_t* pixels, "
+		   "int nrows, int ncols, int ldim)\n", name);
+}
+
+void print_c_code(const char* name, float rotation, bool cuda)
+{
+	static int16_t rtcodes[4096][1024][4];
+
+	// generate rotated binary tests
+	int q = (1<<16);
+
+	int qsin = (int)( q*sin(rotation) );
+	int qcos = (int)( q*cos(rotation) );
+
+	int maxr = 0;
+	int maxc = 0;
+
+	for (int i = 0; i < ntrees; ++i)
+	{
+		for (int j = 0; j < (1<<tdepth) - 1; ++j)
+		{
+			int8_t* p = (int8_t*)&tcodes[i][j];
+
+			rtcodes[i][j][0] = (p[0]*qcos - p[1]*qsin)/q;
+			rtcodes[i][j][1] = (p[0]*qsin + p[1]*qcos)/q;
+
+			rtcodes[i][j][2] = (p[2]*qcos - p[3]*qsin)/q;
+			rtcodes[i][j][3] = (p[2]*qsin + p[3]*qcos)/q;
+
+			maxr = MAX(maxr, MAX(ABS(rtcodes[i][j][0]), ABS(rtcodes[i][j][2])));
+			maxc = MAX(maxc, MAX(ABS(rtcodes[i][j][1]), ABS(rtcodes[i][j][3])));
+		}
+	}
+
+	if (cuda)
+		print_func_name_cuda(name);
+	else
+		print_func_name_c(name);
 	printf("{\n");
 
 	printf("	int i, idx, sr, sc;\n");
 
 	printf("\n");
-	printf("	static short tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
+	if (cuda)
+		printf("	static short tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
+	else
+		printf("	static int16_t tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
+
 	printf("	{\n");
 	for (int i = 0; i < ntrees; ++i)
 	{
@@ -301,9 +216,9 @@ int main(int argc, char* argv[])
 	if (!error)
 	{
 		if (argc == 4)
-			print_c_code(argv[3], rotation);
+			print_c_code(argv[3], rotation, false);
 		else if (argc == 5 && !strcmp(argv[4], "--cuda"))
-			print_cuda_code(argv[3], rotation);
+			print_c_code(argv[3], rotation, true);
 		else
 			error = true;
 	}
