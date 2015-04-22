@@ -24,6 +24,7 @@
 #include "detect-cuda.h"
 #include "cascades/face-cpu.h"
 
+#include <algorithm>
 #include <cstring>
 
 int find_objects(
@@ -32,24 +33,21 @@ int find_objects(
 	const uint8_t* pixels, int nrows, int ncols, int ldim,
 	float scalefactor, float stridefactor, float minsize, float maxsize)
 {
-	float s;
-	int ndetections;
-
-	ndetections = 0;
-	s = minsize;
-
-	while (s<=maxsize)
+	int ndetections = 0;
+	for (float s = minsize; s <= maxsize; s *= scalefactor)
 	{
-		float dr, dc;
-		dr = dc = MAX(stridefactor*s, 1.0f);
+		float dr = std::max(stridefactor * s, 1.0f);
+		float dc = dr;
 
-		for (float r=s/2+1; r<=nrows-s/2-1; r+=dr)
+		for (float r = s/2+1; r <= nrows-s/2-1; r += dr)
 		{
-			for (float c=s/2+1; c<=ncols-s/2-1; c+=dc)
+			for (float c = s/2+1; c <= ncols-s/2-1; c += dc)
 			{
+				if (ndetections >= maxndetections)
+					break;
+
 				float q;
-				if (detection_func(&q, r, c, s, pixels, nrows, ncols, ldim) != 1
-						|| ndetections >= maxndetections)
+				if (detection_func(&q, r, c, s, pixels, nrows, ncols, ldim) != 1)
 					continue;
 
 				qs[ndetections] = q;
@@ -60,10 +58,7 @@ int find_objects(
 				++ndetections;
 			}
 		}
-
-		s = scalefactor*s;
 	}
-
 	return ndetections;
 }
 
@@ -156,7 +151,7 @@ int find_faces_cpu(
 		rs, cs, ss, qs, maxndetections,
 		facedet,
 		pixels, nrows, ncols, ldim,
-		scalefactor, stridefactor, minsize, maxsize);)
+		scalefactor, stridefactor, minsize, maxsize);
 }
 
 int find_faces(bool use_cuda,
