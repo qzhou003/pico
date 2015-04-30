@@ -17,10 +17,11 @@
  *	IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <stdio.h>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <cmath>
 #include <stdint.h>
-#include <string.h>
-#include <math.h>
 
 #define MAX(a, b) ((a)>(b)?(a):(b))
 #define ABS(x) ((x)>0?(x):(-(x)))
@@ -34,7 +35,7 @@ float luts[4096][1024];
 
 float thresholds[4096];
 
-int load_cascade(const char* path)
+int load_cascade(const char* path, double threshold_shift)
 {
 	FILE* file = fopen(path, "rb");
 	if (!file)
@@ -50,6 +51,8 @@ int load_cascade(const char* path)
 		fread(&tcodes[i][0], sizeof(int32_t), (1<<tdepth)-1, file);
 		fread(&luts[i][0], sizeof(float), 1<<tdepth, file);
 		fread(&thresholds[i], sizeof(float), 1, file);
+		if (threshold_shift)
+			thresholds[i] -= fabs(thresholds[i]) * threshold_shift;
 	}
 
 	fclose(file);
@@ -250,24 +253,27 @@ void print_c_code(const char* name, float rotation, bool cuda)
 	printf("}\n");
 }
 
+// usage: picogen cascade_name rot_angle func_name threshold_shift [--cuda]
+// TODO: getopt
 int main(int argc, char* argv[])
 {
 	float rotation = 0;
 	bool error = false;
 
-	if (argc < 4)
+	if (argc < 5)
 		error = true;
 	else
 	{
-		load_cascade(argv[1]);
-		sscanf(argv[2], "%f", &rotation);
+		double shift = atof(argv[4]);
+		rotation = float(atof(argv[2]));
+		load_cascade(argv[1], shift);
 	}
 
 	if (!error)
 	{
-		if (argc == 4)
+		if (argc == 5)
 			print_c_code(argv[3], rotation, false);
-		else if (argc == 5 && !strcmp(argv[4], "--cuda"))
+		else if (argc == 6 && !strcmp(argv[5], "--cuda"))
 			print_c_code(argv[3], rotation, true);
 		else
 			error = true;
