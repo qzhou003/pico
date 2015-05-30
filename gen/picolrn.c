@@ -851,23 +851,20 @@ int learn_with_default_parameters(char* trdata, char* dst)
 	int i, np, nn;
 	float fpr;
 
-	//
-	if(!load_training_data(trdata))
+	if (!load_training_data(trdata))
 	{
 		printf("* cannot load training data ...\n");
 		return 0;
 	}
 
-	//
 	tsr = 1.0f;
 	tsc = 1.0f;
 
 	tdepth = 5;
 
-	if(!save_cascade_to_file(dst))
+	if (!save_cascade_to_file(dst))
 			return 0;
 
-	//
 	sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn);
 	learn_new_stage(0.9800f, 0.5f, 4, tvals, rs, cs, ss, iinds, os, np, nn);
 	save_cascade_to_file(dst);
@@ -892,7 +889,6 @@ int learn_with_default_parameters(char* trdata, char* dst)
 
 	printf("\n");
 
-	//
 	while(sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn) > 1e-6f)
 	{
 		learn_new_stage(0.9975f, 0.5f, 64, tvals, rs, cs, ss, iinds, os, np, nn);
@@ -901,19 +897,7 @@ int learn_with_default_parameters(char* trdata, char* dst)
 		printf("\n");
 	}
 
-	//
 	printf("* target FPR achieved ... terminating the learning process ...\n");
-}
-
-/*
-	
-*/
-
-const char* howto()
-{
-	return
-		"TODO\n"
-	;
 }
 
 int main(int argc, char* argv[])
@@ -921,37 +905,30 @@ int main(int argc, char* argv[])
 	// initialize the PRNG
 	smwcrand(time(0));
 
-	//
-	if(argc == 3)
+	if (argc == 3)
 	{
 		learn_with_default_parameters(argv[1], argv[2]);
 	}
-	if(argc == 5)
+	if (argc == 5)
 	{
 		sscanf(argv[1], "%f", &tsr);
 		sscanf(argv[2], "%f", &tsc);
-
 		sscanf(argv[3], "%d", &tdepth);
 
-		//
 		ntrees = 0;
 
-		//
-		if(!save_cascade_to_file(argv[4]))
+		if (!save_cascade_to_file(argv[4]))
 			return 0;
 
-		//
 		printf("* initializing: (%f, %f, %d)\n", tsr, tsc, tdepth);
 
-		//
 		return 0;
 	}
-	else if(argc == 7)
+	else if (argc == 7)
 	{
 		float tpr, fpr;
 		int ntrees, np, nn;
 
-		//
 		if(!load_cascade_from_file(argv[1]))
 		{
 			printf("* cannot load a cascade from '%s'\n", argv[1]);
@@ -964,17 +941,14 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 
-		//
 		sscanf(argv[3], "%f", &tpr);
 		sscanf(argv[4], "%f", &fpr);
 		sscanf(argv[5], "%d", &ntrees);
 
-		//
 		sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn);
 		learn_new_stage(tpr, fpr, ntrees, tvals, rs, cs, ss, iinds, os, np, nn);
 
-		//
-		if(!save_cascade_to_file(argv[6]))
+		if (!save_cascade_to_file(argv[6]))
 			return 1;
 	}
 	else
@@ -983,6 +957,5 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
-	//
 	return 0;
 }

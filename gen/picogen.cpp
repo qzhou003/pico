@@ -262,8 +262,6 @@ void usage(const char *prog_name)
 		   "<detection function name>\n", prog_name);
 }
 
-// usage: picogen cascade_name rot_angle func_name threshold_shift [--cuda]
-// TODO: getopt
 int main(int argc, char* argv[])
 {
 	std::string cascade_name;
