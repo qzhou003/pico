@@ -889,7 +889,7 @@ int learn_with_default_parameters(char* trdata, char* dst)
 
 	printf("\n");
 
-	while(sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn) > 1e-6f)
+	while (sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn) > 1e-6f)
 	{
 		learn_new_stage(0.9975f, 0.5f, 64, tvals, rs, cs, ss, iinds, os, np, nn);
 		save_cascade_to_file(dst);
