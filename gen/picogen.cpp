@@ -17,6 +17,8 @@
  *	IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <string>
+
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -35,11 +37,11 @@ float luts[4096][1024];
 
 float thresholds[4096];
 
-int load_cascade(const char* path, double threshold_shift)
+bool load_cascade(const char* path, double threshold_shift)
 {
 	FILE* file = fopen(path, "rb");
 	if (!file)
-		return 0;
+		return false;
 
 	fread(&tsr, sizeof(float), 1, file);
 	fread(&tsc, sizeof(float), 1, file);
@@ -56,7 +58,7 @@ int load_cascade(const char* path, double threshold_shift)
 	}
 
 	fclose(file);
-	return 1;
+	return true;
 }
 
 int save_cascade(const char* path)
@@ -95,7 +97,7 @@ void print_func_name_c(const char *name)
 		   "int nrows, int ncols, int ldim)\n", name);
 }
 
-void print_c_code(const char* name, float rotation, bool cuda)
+void print_c_code(const char* name, double rotation, bool cuda)
 {
 	static int16_t rtcodes[4096][1024][4];
 
@@ -253,38 +255,77 @@ void print_c_code(const char* name, float rotation, bool cuda)
 	printf("}\n");
 }
 
+void usage(const char *prog_name)
+{
+	printf("Usage:\n");
+	printf("%s [-r rotation_angle] [-s threshold_shift] [--cuda] <cascade> "
+		   "<detection function name>\n", prog_name);
+}
+
 // usage: picogen cascade_name rot_angle func_name threshold_shift [--cuda]
 // TODO: getopt
 int main(int argc, char* argv[])
 {
-	float rotation = 0;
-	bool error = false;
-
-	if (argc < 5)
-		error = true;
-	else
+	std::string cascade_name;
+	std::string func_name;
+	double th_shift = 0;
+	double rotation = 0;
+	bool use_cuda = false;
+	int opt_count = 1;
+	while (opt_count < argc)
 	{
-		double shift = atof(argv[4]);
-		rotation = float(atof(argv[2]));
-		load_cascade(argv[1], shift);
-	}
-
-	if (!error)
-	{
-		if (argc == 5)
-			print_c_code(argv[3], rotation, false);
-		else if (argc == 6 && !strcmp(argv[5], "--cuda"))
-			print_c_code(argv[3], rotation, true);
+		if (std::string(argv[opt_count]) == "-r")
+		{
+			++opt_count;
+			if (opt_count < argc)
+				rotation = atof(argv[opt_count + 1]);
+		}
+		else if (std::string(argv[opt_count]) == "-s")
+		{
+			++opt_count;
+			if (opt_count < argc)
+				th_shift = atof(argv[opt_count + 1]);
+		}
+		else if (std::string(argv[opt_count]) == "--cuda")
+		{
+			use_cuda = true;
+		}
+		else if (std::string(argv[opt_count]) == "-h")
+		{
+			usage(argv[0]);
+			return 0;
+		}
+		else if (argv[opt_count][0] == '-')
+		{
+			printf("unknown parameter %s\n", argv[opt_count]);
+		}
+		else if (cascade_name.empty())
+		{
+			cascade_name = argv[opt_count];
+		}
+		else if (func_name.empty())
+		{
+			func_name = argv[opt_count];
+		}
 		else
-			error = true;
+		{
+			printf("unknown parameter %s\n", argv[opt_count]);
+		}
+		++opt_count;
 	}
 
-	if (error)
+	if (cascade_name.empty() || func_name.empty())
 	{
-		printf("Usage: %s <cascade> <in-plane rotation> "
-			   "<detection function name> [--cuda]\n", argv[0]);
-		return 0;
+		usage(argv[0]);
+		return -1;
 	}
 
+	if (!load_cascade(cascade_name.c_str(), th_shift))
+	{
+		printf("ERROR: can't load cascade %s\n", cascade_name.c_str());
+		return -2;
+	}
+
+	print_c_code(func_name.c_str(), rotation, use_cuda);
 	return 0;
 }
