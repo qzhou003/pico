@@ -139,21 +139,18 @@ int load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
 		- an array of w*h unsigned bytes representing pixel intensities
 	*/
 
-	//
-	if(fread(nrows, sizeof(int), 1, file) != 1)
+	if (fread(nrows, sizeof(int), 1, file) != 1)
 		return 0;
 
-	if(fread(ncols, sizeof(int), 1, file) != 1)
+	if (fread(ncols, sizeof(int), 1, file) != 1)
 		return 0;
 
-	//
 	*pixels = (uint8_t*)malloc(*nrows**ncols*sizeof(uint8_t));
-
-	if(!*pixels)
+	if (!*pixels)
 		return 0;
 
 	// read pixels
-	if(fread(*pixels, sizeof(uint8_t), *nrows**ncols, file) != *nrows**ncols)
+	if (fread(*pixels, sizeof(uint8_t), *nrows**ncols, file) != *nrows**ncols)
 		return 0;
 
 	// we're done
@@ -163,7 +160,6 @@ int load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
 int load_training_data(const char* path)
 {
 	FILE* file = fopen(path, "rb");
-
 	if (!file)
 		return 0;
 
@@ -172,7 +168,7 @@ int load_training_data(const char* path)
 	nbackground = 0;
 	nobjects = 0;
 
-	while( load_image(&ppixels[N], &pdims[N][0], &pdims[N][1], file) )
+	while (load_image(&ppixels[N], &pdims[N][0], &pdims[N][1], file))
 	{
 		int n = 0;
 		if (fread(&n, sizeof(int), 1, file) != 1)
@@ -474,17 +470,15 @@ float get_tree_output(int i, int r, int c, int sr, int sc, int iind)
 
 int classify_region(float* o, int r, int c, int s, int iind)
 {
-	int i, sr, sc;
-
 	if (!ntrees)
 		return 1;
 
-	sr = (int)(tsr*s);
-	sc = (int)(tsc*s);
+	int sr = (int)(tsr*s);
+	int sc = (int)(tsc*s);
 
 	*o = 0.0f;
 
-	for (i=0; i<ntrees; ++i)
+	for (int i = 0; i < ntrees; ++i)
 	{
 		*o += get_tree_output(i, r, c, sr, sc, iind);
 
@@ -495,35 +489,26 @@ int classify_region(float* o, int r, int c, int s, int iind)
 	return 1;
 }
 
-int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[], int rs[], int cs[], int ss[], int iinds[], float os[], int np, int nn)
+int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
+					int rs[], int cs[], int ss[], int iinds[], float os[], int np, int nn)
 {
-	int i;
-
-	int* srs;
-	int* scs;
-
-	double* ws;
-	double wsum;
-
-	float threshold, tpr, fpr;
-
 	printf("* learning new stage ...\n");
 
-	srs = (int*)malloc((np+nn)*sizeof(int));
-	scs = (int*)malloc((np+nn)*sizeof(int));
+	int* srs = (int*)malloc((np+nn)*sizeof(int));
+	int* scs = (int*)malloc((np+nn)*sizeof(int));
 
-	for(i=0; i<np+nn; ++i)
+	for (int i = 0; i < np + nn; ++i)
 	{
 		srs[i] = (int)( tsr*ss[i] );
 		scs[i] = (int)( tsc*ss[i] );
 	}
 
-	ws = (double*)malloc((np+nn)*sizeof(double));
+	double* ws = (double*)malloc((np+nn)*sizeof(double));
 
-	maxntrees = ntrees + maxntrees;
-	fpr = 1.0f;
-
-	while(ntrees<maxntrees && fpr>maxfpr)
+	maxntrees += ntrees;
+	float fpr = 1.0f;
+	float threshold = 5.0f;
+	while (ntrees < maxntrees && fpr > maxfpr)
 	{
 		float t;
 		int numtps, numfps;
@@ -531,9 +516,8 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[], in
 		t = getticks();
 
 		// compute weights ...
-		wsum = 0.0;
-
-		for(i=0; i<np+nn; ++i)
+		double wsum = 0.0;
+		for (int i=0; i<np+nn; ++i)
 		{
 			if(tvals[i] > 0)
 				ws[i] = exp(-1.0*os[i])/np;
@@ -543,7 +527,7 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[], in
 			wsum += ws[i];
 		}
 
-		for(i=0; i<np+nn; ++i)
+		for (int i = 0; i < np + nn; ++i)
 			ws[i] /= wsum;
 
 		// grow a tree ...
@@ -554,15 +538,15 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[], in
 		++ntrees;
 
 		// update outputs ...
-		for(i=0; i<np+nn; ++i)
+		for (int i = 0; i < np + nn; ++i)
 		{
 			float o = get_tree_output(ntrees-1, rs[i], cs[i], srs[i], scs[i], iinds[i]);
 			os[i] += o;
 		}
 
 		// get threshold ...
-		threshold = 5.0f;
-
+		float threshold = 5.0f;
+		float tpr = 0;
 		do
 		{
 			threshold -= 0.005f;
@@ -570,18 +554,18 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[], in
 			numtps = 0;
 			numfps = 0;
 
-			for (i=0; i<np+nn; ++i)
+			for (int i = 0; i < np + nn; ++i)
 			{
-				if( tvals[i]>0 && os[i]>threshold)
+				if (tvals[i] > 0 && os[i] > threshold)
 					++numtps;
-				if(	tvals[i]<0 && os[i]>threshold)
+				if (tvals[i] < 0 && os[i] > threshold)
 					++numfps;
 			}
 
-			tpr = numtps/(float)np;
-			fpr = numfps/(float)nn;
+			tpr = numtps / (float)np;
+			fpr = numfps / (float)nn;
 		}
-		while (tpr<mintpr);
+		while (tpr < mintpr);
 
 		printf("	** tree %d (%d [s]) ... stage tpr=%f, stage fpr=%f\n", ntrees, (int)(getticks()-t), tpr, fpr);
 		fflush(stdout);
@@ -593,75 +577,61 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[], in
 
 	free(srs);
 	free(scs);
-
 	free(ws);
 
 	return 1;
 }
 
-float sample_training_data(float tvals[], int rs[], int cs[], int ss[], int iinds[], float os[], int* np, int* nn)
+float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
+						   int iinds[], float os[], int* np, int* nn)
 {
-	int i, n;
-
-	int64_t nw;
-	float etpr, efpr;
-
-	int t;
-
 	#define NUMPRNGS 1024
 	static int prngsinitialized = 0;
 	static uint64_t prngs[NUMPRNGS];
 
-	int stop;
-
-	t = getticks();
-	n = 0;
+	int t = getticks();
+	int n = 0;
 
 	// object samples
-
-	for (i=0; i<nobjects; ++i)
-		if( classify_region(&os[n], objects[i][0], objects[i][1], objects[i][2], objects[i][3]) == 1 )
+	for (int i = 0; i < nobjects; ++i)
+	{
+		if (classify_region(&os[n], objects[i][0], objects[i][1], objects[i][2], objects[i][3]) == 1)
 		{
 			rs[n] = objects[i][0];
 			cs[n] = objects[i][1];
 			ss[n] = objects[i][2];
 
-
 			iinds[n] = objects[i][3];
-
 			tvals[n] = +1;
 
 			++n;
 		}
+	}
 
 	*np = n;
 
 	// non-object samples
-
-	if(!prngsinitialized)
+	if (!prngsinitialized)
 	{
 		// initialize a PRNG for each thread
-		for(i=0; i<NUMPRNGS; ++i)
+		for (int i=0; i<NUMPRNGS; ++i)
 			prngs[i] = 0xFFFF*mwcrand() + 0xFFFF1234FFFF0001LL*mwcrand();
 
 		prngsinitialized = 1;
 	}
 
-	nw = 0;
+	int64_t nw = 0;
 	*nn = 0;
 
-	stop = 0;
+	int stop = 0;
 
 	if (nbackground)
 	{
 		#pragma omp parallel
 		{
-			int thid;
+			int thid = omp_get_thread_num();
 
-			//
-			thid = omp_get_thread_num();
-
-			while(!stop)
+			while (!stop)
 			{
 				/*
 					data mine hard negatives
@@ -677,12 +647,12 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[], int iind
 				c = mwcrand_r(&prngs[thid])%pdims[iind][1];
 				s = objects[mwcrand_r(&prngs[thid])%nobjects][2]; // sample the size of a random object in the pool
 
-				if( classify_region(&o, r, c, s, iind) == 1 )
+				if (classify_region(&o, r, c, s, iind) == 1)
 				{
 					//we have a false positive ...
 					#pragma omp critical
 					{
-						if(*nn<*np)
+						if (*nn < *np)
 						{
 							rs[n] = r;
 							cs[n] = c;
@@ -694,7 +664,6 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[], int iind
 
 							tvals[n] = -1;
 
-							//
 							++n;
 							++*nn;
 						}
@@ -703,13 +672,13 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[], int iind
 					}
 				}
 
-				if(!stop)
+				if (!stop)
 				{
 					#pragma omp atomic
 					++nw;
 				}
 			}
-		}
+		}  // omp parallel
 	}
 	else
 		nw = 1;
@@ -718,8 +687,8 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[], int iind
 		print the estimated true positive and false positive rates
 	*/
 
-	etpr = *np/(float)nobjects;
-	efpr = (float)( *nn/(double)nw );
+	float etpr = *np/(float)nobjects;
+	float efpr = (float)( *nn/(double)nw );
 
 	printf("* sampling finished ...\n");
 	printf("	** elapsed time: %d\n", (int)(getticks()-t));
@@ -890,8 +859,7 @@ int main(int argc, char* argv[])
 		printf("* initializing: (%f, %f, %d)\n", tsr, tsc, tdepth);
 		return 0;
 	}
-
-	if (one_stage)
+	else if (one_stage)
 	{
 		if (!load_cascade_from_file(cascade_file_name.c_str()))
 		{
