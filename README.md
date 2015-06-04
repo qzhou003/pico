@@ -66,7 +66,7 @@ If you use the provided code/binaries for your work, please cite the following p
 
 ## Contact
 
-For any additional information contact me at <nenad.markus@fer.hr>.
+For any additional information about original implementation contact Nenad Markus <nenad.markus@fer.hr>.
+For additional information about GPU-accelerated cascade and optimization tool contact Viktor Pogrebniak <avtomaton@gmail.com>
 
 Copyright (c) 2013, Nenad Markus.
-All rights reserved.
