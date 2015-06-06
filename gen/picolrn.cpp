@@ -384,24 +384,16 @@ int grow_subtree(int32_t tcodes[], float lut[], int nodeidx, int d, int maxd, fl
 
 int grow_rtree(int32_t tcodes[], float lut[], int d, float tvals[], int rs[], int cs[], int srs[], int scs[], int iinds[], double ws[], int n)
 {
-	int i;
-	int* inds;
+	printf("	**growing tree... ");
+	int* inds = (int*)malloc(n*sizeof(int));
 
-	inds = (int*)malloc(n*sizeof(int));
-
-	for(i=0; i<n; ++i)
+	for (int i = 0; i < n; ++i)
 		inds[i] = i;
 
-	if (!grow_subtree(tcodes, lut, 0, 0, d, tvals, rs, cs, srs, scs, iinds, ws, inds, n))
-	{
-		free(inds);
-		return 0;
-	}
-	else
-	{
-		free(inds);
-		return 1;
-	}
+	int ret = grow_subtree(tcodes, lut, 0, 0, d, tvals, rs, cs, srs, scs, iinds, ws, inds, n);
+	free(inds);
+	printf("OK\n");
+	return ret;
 }
 
 float tsr, tsc;
@@ -438,6 +430,8 @@ int load_cascade_from_file(const char* path)
 
 int save_cascade_to_file(const char* path)
 {
+	printf("* saving cascade...");
+	fflush(stdout);
 	FILE* file = fopen(path, "wb");
 	if (!file)
 		return 0;
@@ -455,6 +449,8 @@ int save_cascade_to_file(const char* path)
 	}
 
 	fclose(file);
+	printf("OK\n");
+	fflush(stdout);
 	return 1;
 }
 
@@ -492,7 +488,8 @@ int classify_region(float* o, int r, int c, int s, int iind)
 int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 					int rs[], int cs[], int ss[], int iinds[], float os[], int np, int nn)
 {
-	printf("* learning new stage ...\n");
+	printf("* learning new stage...\n");
+	fflush(stdout);
 
 	int* srs = (int*)malloc((np+nn)*sizeof(int));
 	int* scs = (int*)malloc((np+nn)*sizeof(int));
@@ -510,10 +507,7 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 	float threshold = 5.0f;
 	while (ntrees < maxntrees && fpr > maxfpr)
 	{
-		float t;
-		int numtps, numfps;
-
-		t = getticks();
+		float t = getticks();
 
 		// compute weights ...
 		double wsum = 0.0;
@@ -532,9 +526,7 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 
 		// grow a tree ...
 		grow_rtree(tcodes[ntrees], luts[ntrees], tdepth, tvals, rs, cs, srs, scs, iinds, ws, np+nn);
-
 		thresholds[ntrees] = -1337.0f;
-
 		++ntrees;
 
 		// update outputs ...
@@ -551,8 +543,8 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 		{
 			threshold -= 0.005f;
 
-			numtps = 0;
-			numfps = 0;
+			int numtps = 0;
+			int numfps = 0;
 
 			for (int i = 0; i < np + nn; ++i)
 			{
@@ -567,13 +559,14 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 		}
 		while (tpr < mintpr);
 
-		printf("	** tree %d (%d [s]) ... stage tpr=%f, stage fpr=%f\n", ntrees, (int)(getticks()-t), tpr, fpr);
+		printf("	** tree %d (%d [s]) ... stage tpr=%f, stage fpr=%f\n",
+			   ntrees, (int)(getticks()-t), tpr, fpr);
 		fflush(stdout);
 	}
 
 	thresholds[ntrees-1] = threshold;
-
 	printf("	** threshold set to %f\n", threshold);
+	fflush(stdout);
 
 	free(srs);
 	free(scs);
@@ -585,6 +578,9 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 						   int iinds[], float os[], int* np, int* nn)
 {
+	printf("* sampling data...\n");
+	fflush(stdout);
+
 	#define NUMPRNGS 1024
 	static int prngsinitialized = 0;
 	static uint64_t prngs[NUMPRNGS];
@@ -690,10 +686,11 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	float etpr = *np/(float)nobjects;
 	float efpr = (float)( *nn/(double)nw );
 
-	printf("* sampling finished ...\n");
+	printf("* sampling finished\n");
 	printf("	** elapsed time: %d\n", (int)(getticks()-t));
 	printf("	** cascade TPR=%.8f\n", etpr);
 	printf("	** cascade FPR=%.8f (%d/%lld)\n", efpr, *nn, (long long int)nw);
+	fflush(stdout);
 
 	return efpr;
 }
