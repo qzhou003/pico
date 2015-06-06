@@ -477,7 +477,6 @@ int classify_region(float* o, int r, int c, int s, int iind)
 	for (int i = 0; i < ntrees; ++i)
 	{
 		*o += get_tree_output(i, r, c, sr, sc, iind);
-
 		if (*o <= thresholds[i])
 			return -1;
 	}
@@ -589,6 +588,8 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	int n = 0;
 
 	// object samples
+	printf("* sampling positives...\n");
+	fflush(stdout);
 	for (int i = 0; i < nobjects; ++i)
 	{
 		if (classify_region(&os[n], objects[i][0], objects[i][1], objects[i][2], objects[i][3]) == 1)
@@ -619,33 +620,39 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	int64_t nw = 0;
 	*nn = 0;
 
+	printf("* sampling negatives\n");
+	fflush(stdout);
 	int stop = 0;
-
 	if (nbackground)
 	{
 		#pragma omp parallel
 		{
 			int thid = omp_get_thread_num();
 
+			#pragma omp master
+			{
+				if (nw % 1000 == 0)
+				{
+					printf(".");
+					fflush(stdout);
+				}
+			}
+
+			// data mine hard negatives
 			while (!stop)
 			{
-				/*
-					data mine hard negatives
-				*/
+				// take random image
+				int iind = background[mwcrand_r(&prngs[thid]) % nbackground];
+
+				// sample the size of a random object in the pool
+				int r = mwcrand_r(&prngs[thid])%pdims[iind][0];
+				int c = mwcrand_r(&prngs[thid])%pdims[iind][1];
+				int s = objects[mwcrand_r(&prngs[thid])%nobjects][2];
 
 				float o;
-				int iind, s, r, c, nrows, ncols;
-				uint8_t* pixels;
-
-				iind = background[ mwcrand_r(&prngs[thid])%nbackground ];
-
-				r = mwcrand_r(&prngs[thid])%pdims[iind][0];
-				c = mwcrand_r(&prngs[thid])%pdims[iind][1];
-				s = objects[mwcrand_r(&prngs[thid])%nobjects][2]; // sample the size of a random object in the pool
-
 				if (classify_region(&o, r, c, s, iind) == 1)
 				{
-					//we have a false positive ...
+					// we have a false positive ...
 					#pragma omp critical
 					{
 						if (*nn < *np)
