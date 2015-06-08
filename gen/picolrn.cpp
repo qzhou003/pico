@@ -221,17 +221,12 @@ int bintest(int32_t tcode, int r, int c, int sr, int sc, int iind)
 
 float get_split_error(int32_t tcode, float tvals[], int rs[], int cs[], int srs[], int scs[], int iinds[], double ws[], int inds[], int indsnum)
 {
-	int i, j;
-
 	double wsum, wsum0, wsum1;
 	double wtvalsum0, wtvalsumsqr0, wtvalsum1, wtvalsumsqr1;
 
-	double wmse0, wmse1;
-
-	//
 	wsum = wsum0 = wsum1 = wtvalsum0 = wtvalsum1 = wtvalsumsqr0 = wtvalsumsqr1 = 0.0;
 
-	for(i=0; i<indsnum; ++i)
+	for (int i = 0; i < indsnum; ++i)
 	{
 		if( bintest(tcode, rs[inds[i]], cs[inds[i]], srs[inds[i]], scs[inds[i]], iinds[inds[i]]) )
 		{
@@ -249,46 +244,37 @@ float get_split_error(int32_t tcode, float tvals[], int rs[], int cs[], int srs[
 		wsum += ws[inds[i]];
 	}
 
-	//
-	wmse0 = wtvalsumsqr0 - SQR(wtvalsum0)/wsum0;
-	wmse1 = wtvalsumsqr1 - SQR(wtvalsum1)/wsum1;
+	double wmse0 = wtvalsumsqr0 - SQR(wtvalsum0)/wsum0;
+	double wmse1 = wtvalsumsqr1 - SQR(wtvalsum1)/wsum1;
 
-	//
 	return (float)( (wmse0 + wmse1)/wsum );
 }
 
 int split_training_data(int32_t tcode, float tvals[], int rs[], int cs[], int srs[], int scs[], int iinds[], double ws[], int inds[], int ninds)
 {
-	int stop;
-	int i, j;
+	int stop = 0;
+	int i = 0;
+	int j = ninds - 1;
 
-	int n0;
-
-	stop = 0;
-
-	i = 0;
-	j = ninds - 1;
-
-	while(!stop)
+	while (!stop)
 	{
-		//
-		while( !bintest(tcode, rs[inds[i]], cs[inds[i]], srs[inds[i]], scs[inds[i]], iinds[inds[i]]) )
+		while (!bintest(tcode, rs[inds[i]], cs[inds[i]], srs[inds[i]], scs[inds[i]], iinds[inds[i]]) )
 		{
-			if( i==j )
+			if (i == j)
 				break;
 			else
 				++i;
 		}
 
-		while( bintest(tcode, rs[inds[j]], cs[inds[j]], srs[inds[j]], scs[inds[j]], iinds[inds[j]]) )
+		while (bintest(tcode, rs[inds[j]], cs[inds[j]], srs[inds[j]], scs[inds[j]], iinds[inds[j]]) )
 		{
-			if( i==j )
+			if (i == j)
 				break;
 			else
 				--j;
 		}
 
-		if( i==j )
+		if (i == j)
 			stop = 1;
 		else
 		{
@@ -299,10 +285,9 @@ int split_training_data(int32_t tcode, float tvals[], int rs[], int cs[], int sr
 		}
 	}
 
-	n0 = 0;
-
-	for(i=0; i<ninds; ++i)
-		if( !bintest(tcode, rs[inds[i]], cs[inds[i]], srs[inds[i]], scs[inds[i]], iinds[inds[i]]) )
+	int n0 = 0;
+	for (i=0; i<ninds; ++i)
+		if (!bintest(tcode, rs[inds[i]], cs[inds[i]], srs[inds[i]], scs[inds[i]], iinds[inds[i]]))
 			++n0;
 
 	return n0;
@@ -502,12 +487,12 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 
 		// compute weights ...
 		double wsum = 0.0;
-		for (int i=0; i<np+nn; ++i)
+		for (int i = 0; i < np + nn; ++i)
 		{
 			if(tvals[i] > 0)
-				ws[i] = exp(-1.0*os[i])/np;
+				ws[i] = exp(-1.0 * os[i])  /np;
 			else
-				ws[i] = exp(+1.0*os[i])/nn;
+				ws[i] = exp(+1.0 * os[i]) / nn;
 
 			wsum += ws[i];
 		}
@@ -686,14 +671,13 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	float efpr = (float)( *nn/(double)nw );
 
 	printf("\n* sampling finished\n");
-	printf("	** elapsed time: %d\n", (int)(getticks()-t));
-	printf("	** cascade TPR=%.8f\n", etpr);
+	printf("	** elapsed time: %.2f s\n", getticks() - t);
+	printf("	** cascade TPR=%.8f (%d/%d)\n", etpr, *np, nobjects);
 	printf("	** cascade FPR=%.8f (%d/%lld)\n", efpr, *nn, (long long int)nw);
 	fflush(stdout);
 
 	return efpr;
 }
-
 
 static int rs[2*MAX_N];
 static int cs[2*MAX_N];
