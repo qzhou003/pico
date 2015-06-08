@@ -595,6 +595,7 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	}
 
 	int64_t nw = 0;
+	int64_t stop_nw = int64_t(*np) * 10000000;  // 1e-7 fpr
 	*nn = 0;
 
 	printf("* sampling negatives\n");
@@ -623,7 +624,7 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 					// we have a false positive ...
 					#pragma omp critical
 					{
-						if (*nn < *np)
+						if (*nn < *np && nw < stop_nw)
 						{
 							rs[n] = r;
 							cs[n] = c;
@@ -667,8 +668,8 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 		print the estimated true positive and false positive rates
 	*/
 
-	float etpr = *np/(float)nobjects;
-	float efpr = (float)( *nn/(double)nw );
+	float etpr = *np / (float)nobjects;
+	float efpr = (float)(*nn / (double)nw);
 
 	printf("\n* sampling finished\n");
 	printf("	** elapsed time: %.2f s\n", getticks() - t);
