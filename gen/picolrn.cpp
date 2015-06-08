@@ -113,10 +113,6 @@ uint32_t mwcrand()
 	return mwcrand_r(&prngglobal);
 }
 
-/*
-	
-*/
-
 #define MAX_N 2000000
 
 int N = 0;
@@ -128,6 +124,8 @@ int background[MAX_N]; // i
 
 int nobjects = 0;
 int objects[MAX_N][4]; // (r, c, s, i)
+
+static int cur_stage = 0;
 
 int load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
 {
@@ -312,13 +310,6 @@ int split_training_data(int32_t tcode, float tvals[], int rs[], int cs[], int sr
 
 int grow_subtree(int32_t tcodes[], float lut[], int nodeidx, int d, int maxd, float tvals[], int rs[], int cs[], int srs[], int scs[], int iinds[], double ws[], int inds[], int ninds)
 {
-	int i, nrands;
-
-	int32_t tmptcodes[2048];
-	float es[2048], e;
-
-	int n0;
-
 	if (d == maxd)
 	{
 		int lutidx;
@@ -331,13 +322,13 @@ int grow_subtree(int32_t tcodes[], float lut[], int nodeidx, int d, int maxd, fl
 		tvalaccum = 0.0;
 		wsum = 0.0;
 
-		for(i=0; i<ninds; ++i)
+		for(int i = 0; i < ninds; ++i)
 		{
 			tvalaccum += ws[inds[i]]*tvals[inds[i]];
 			wsum += ws[inds[i]];
 		}
 
-		if(wsum == 0.0)
+		if (wsum == 0.0)
 			lut[lutidx] = 0.0f;
 		else
 			lut[lutidx] = (float)( tvalaccum/wsum );
@@ -355,26 +346,27 @@ int grow_subtree(int32_t tcodes[], float lut[], int nodeidx, int d, int maxd, fl
 	}
 
 	// generate binary test codes
-	nrands = NRANDS;
-
-	for(i=0; i<nrands; ++i)
+	int nrands = NRANDS;
+	int32_t tmptcodes[2048];
+	for (int i = 0; i < nrands; ++i)
 		tmptcodes[i] = mwcrand();
 
+	float es[2048];
 	#pragma omp parallel for
-	for (i=0; i<nrands; ++i)
+	for (int i = 0; i < nrands; ++i)
 		es[i] = get_split_error(tmptcodes[i], tvals, rs, cs, srs, scs, iinds, ws, inds, ninds);
 
-	e = es[0];
+	float e = es[0];
 	tcodes[nodeidx] = tmptcodes[0];
 
-	for(i=1; i<nrands; ++i)
+	for (int i = 1; i < nrands; ++i)
 		if(e > es[i])
 		{
 			e = es[i];
 			tcodes[nodeidx] = tmptcodes[i];
 		}
 
-	n0 = split_training_data(tcodes[nodeidx], tvals, rs, cs, srs, scs, iinds, ws, inds, ninds);
+	int n0 = split_training_data(tcodes[nodeidx], tvals, rs, cs, srs, scs, iinds, ws, inds, ninds);
 
 	grow_subtree(tcodes, lut, 2*nodeidx+1, d+1, maxd, tvals, rs, cs, srs, scs, iinds, ws, &inds[0], n0);
 	grow_subtree(tcodes, lut, 2*nodeidx+2, d+1, maxd, tvals, rs, cs, srs, scs, iinds, ws, &inds[n0], ninds-n0);
@@ -487,7 +479,7 @@ int classify_region(float* o, int r, int c, int s, int iind)
 int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 					int rs[], int cs[], int ss[], int iinds[], float os[], int np, int nn)
 {
-	printf("* learning new stage...\n");
+	printf("* learning stage %d...\n", ++cur_stage);
 	fflush(stdout);
 
 	int* srs = (int*)malloc((np+nn)*sizeof(int));
@@ -558,8 +550,8 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 		}
 		while (tpr < mintpr);
 
-		printf("	** tree %d (%d [s]) ... stage tpr=%f, stage fpr=%f\n",
-			   ntrees, (int)(getticks()-t), tpr, fpr);
+		printf("	** tree %d (%d [s]) (%d stage): tpr=%f, fpr=%f\n",
+			   ntrees, (int)(getticks()-t), cur_stage, tpr, fpr);
 		fflush(stdout);
 	}
 
@@ -714,7 +706,7 @@ bool learn_with_default_parameters(const char* trdata, const char* dst)
 {
 	if (!load_training_data(trdata))
 	{
-		printf("* cannot load training data ...\n");
+		printf("* cannot load training data\n");
 		return false;
 	}
 
@@ -749,7 +741,7 @@ bool learn_with_default_parameters(const char* trdata, const char* dst)
 		printf("\n");
 	}
 
-	printf("* target FPR achieved ... terminating the learning process ...\n");
+	printf("* target FPR achieved, terminating the learning process\n");
 	return true;
 }
 
