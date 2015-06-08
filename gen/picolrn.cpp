@@ -629,15 +629,6 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 		{
 			int thid = omp_get_thread_num();
 
-			#pragma omp master
-			{
-				if (nw % 1000 == 0)
-				{
-					printf(".");
-					fflush(stdout);
-				}
-			}
-
 			// data mine hard negatives
 			while (!stop)
 			{
@@ -675,6 +666,15 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 					}
 				}
 
+				#pragma omp master
+				{
+					if (nw % 1000 == 0)
+					{
+						printf(".");
+						fflush(stdout);
+					}
+				}
+
 				if (!stop)
 				{
 					#pragma omp atomic
@@ -693,7 +693,7 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	float etpr = *np/(float)nobjects;
 	float efpr = (float)( *nn/(double)nw );
 
-	printf("* sampling finished\n");
+	printf("\n* sampling finished\n");
 	printf("	** elapsed time: %d\n", (int)(getticks()-t));
 	printf("	** cascade TPR=%.8f\n", etpr);
 	printf("	** cascade FPR=%.8f (%d/%lld)\n", efpr, *nn, (long long int)nw);
