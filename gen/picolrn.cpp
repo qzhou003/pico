@@ -113,6 +113,16 @@ uint32_t mwcrand()
 	return mwcrand_r(&prngglobal);
 }
 
+void dump_floats(const std::string &filename, float *arr, int size)
+{
+	FILE *f = fopen(filename.c_str(), "wb");
+	if (!f)
+		return;
+
+	for (int i = 0; i < size; ++i)
+		fprintf(f, "%.5f\n", arr[i]);
+}
+
 #define MAX_N 2000000
 
 int N = 0;
@@ -485,58 +495,61 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 	{
 		float t = getticks();
 
-		// compute weights ...
+		// compute weights
 		double wsum = 0.0;
 		for (int i = 0; i < np + nn; ++i)
 		{
-			if(tvals[i] > 0)
-				ws[i] = exp(-1.0 * os[i])  /np;
+			if (tvals[i] > 0)
+				ws[i] = exp(-1.0 * os[i]) / np;
 			else
 				ws[i] = exp(+1.0 * os[i]) / nn;
 
 			wsum += ws[i];
 		}
 
+		// normalize weights
 		for (int i = 0; i < np + nn; ++i)
 			ws[i] /= wsum;
 
-		// grow a tree ...
+		// grow a tree
 		grow_rtree(tcodes[ntrees], luts[ntrees], tdepth, tvals, rs, cs, srs, scs, iinds, ws, np+nn);
-		thresholds[ntrees] = -1337.0f;
-		++ntrees;
+		thresholds[ntrees++] = -1337.0f;
 
-		// update outputs ...
+		// update outputs
 		for (int i = 0; i < np + nn; ++i)
-		{
-			float o = get_tree_output(ntrees-1, rs[i], cs[i], srs[i], scs[i], iinds[i]);
-			os[i] += o;
-		}
+			os[i] += get_tree_output(ntrees - 1, rs[i], cs[i], srs[i], scs[i], iinds[i]);
 
-		// get threshold ...
+		// get threshold
 		float threshold = 5.0f;
 		float tpr = 0;
-		do
+		int maxiter = 1000000;
+		int it = 0;
+		for (; it < maxiter && tpr < mintpr; ++it)
 		{
 			threshold -= 0.005f;
 
 			int numtps = 0;
 			int numfps = 0;
 
-			for (int i = 0; i < np + nn; ++i)
+			for (int s = 0; s < np + nn; ++s)
 			{
-				if (tvals[i] > 0 && os[i] > threshold)
+				if (tvals[s] > 0 && os[s] > threshold)
 					++numtps;
-				if (tvals[i] < 0 && os[i] > threshold)
+				if (tvals[s] < 0 && os[s] > threshold)
 					++numfps;
 			}
 
 			tpr = numtps / (float)np;
 			fpr = numfps / (float)nn;
 		}
-		while (tpr < mintpr);
+		if (it == maxiter)
+		{
+			printf("	** MAX ITERATIONS, see os.dump\n");
+			dump_floats("os.dump", os, np + nn);
+		}
 
-		printf("	** tree %d (%d [s]) (%d stage): tpr=%f, fpr=%f\n",
-			   ntrees, (int)(getticks()-t), cur_stage, tpr, fpr);
+		printf("	** tree %d (%d stage, %.2f s): tpr=%f, fpr=%f\n",
+			   ntrees, cur_stage, getticks() - t, tpr, fpr);
 		fflush(stdout);
 	}
 
@@ -564,6 +577,7 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	int t = getticks();
 	int n = 0;
 
+	// TODO: add ALL positives to dataset (or/and export doubtful samples for review)
 	// object samples
 	printf("* sampling positives...\n");
 	fflush(stdout);
@@ -598,6 +612,7 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	int64_t stop_nw = int64_t(*np) * 10000000;  // 1e-7 fpr
 	*nn = 0;
 
+	// TODO: detect negatives instead of random export
 	printf("* sampling negatives\n");
 	fflush(stdout);
 	int stop = 0;
@@ -614,9 +629,9 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 				int iind = background[mwcrand_r(&prngs[thid]) % nbackground];
 
 				// sample the size of a random object in the pool
-				int r = mwcrand_r(&prngs[thid])%pdims[iind][0];
-				int c = mwcrand_r(&prngs[thid])%pdims[iind][1];
-				int s = objects[mwcrand_r(&prngs[thid])%nobjects][2];
+				int r = mwcrand_r(&prngs[thid]) % pdims[iind][0];
+				int c = mwcrand_r(&prngs[thid]) % pdims[iind][1];
+				int s = objects[mwcrand_r(&prngs[thid]) % nobjects][2];
 
 				float o;
 				if (classify_region(&o, r, c, s, iind) == 1)
