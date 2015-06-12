@@ -379,7 +379,7 @@ int grow_rtree(int32_t tcodes[], float lut[], int d, float tvals[], int rs[], in
 
 	int ret = grow_subtree(tcodes, lut, 0, 0, d, tvals, rs, cs, srs, scs, iinds, ws, inds, n);
 	free(inds);
-	printf("OK\n");
+	printf("OK\r");
 	return ret;
 }
 
@@ -472,7 +472,7 @@ int classify_region(float* o, int r, int c, int s, int iind)
 }
 
 int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
-					int rs[], int cs[], int ss[], int iinds[], float os[], int np, int nn)
+	int rs[], int cs[], int ss[], int iinds[], float os[], int np, int nn)
 {
 	printf("* learning stage %d...\n", ++cur_stage);
 	fflush(stdout);
@@ -490,7 +490,6 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 
 	maxntrees += ntrees;
 	float fpr = 1.0f;
-	float threshold = 5.0f;
 	while (ntrees < maxntrees && fpr > maxfpr)
 	{
 		float t = getticks();
@@ -548,13 +547,13 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 			dump_floats("os.dump", os, np + nn);
 		}
 
-		printf("	** tree %d (%d stage, %.2f s): tpr=%f, fpr=%f\n",
-			   ntrees, cur_stage, getticks() - t, tpr, fpr);
+		thresholds[ntrees - 1] = threshold;
+		printf("	** tree %d (%d stage, %.2f s): th=%.2f, tpr=%f, fpr=%f\n",
+			   ntrees, cur_stage, getticks() - t, threshold, tpr, fpr);
 		fflush(stdout);
 	}
 
-	thresholds[ntrees-1] = threshold;
-	printf("	** threshold set to %f\n", threshold);
+	printf("	** threshold set to %f\n", thresholds[ntrees - 1]);
 	fflush(stdout);
 
 	free(srs);
@@ -565,7 +564,7 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 }
 
 float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
-						   int iinds[], float os[], int* np, int* nn)
+	int iinds[], float os[], int* np, int* nn)
 {
 	printf("* sampling data...\n");
 	fflush(stdout);
@@ -661,9 +660,9 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 
 				#pragma omp master
 				{
-					if (nw % 1000 == 0)
+					if (nw % 100000 == 0)
 					{
-						printf(".");
+						printf("%.2lf %ld\r", o, nw);
 						fflush(stdout);
 					}
 				}
@@ -686,7 +685,7 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	float etpr = *np / (float)nobjects;
 	float efpr = (float)(*nn / (double)nw);
 
-	printf("\n* sampling finished\n");
+	printf("* sampling finished\n");
 	printf("	** elapsed time: %.2f s\n", getticks() - t);
 	printf("	** cascade TPR=%.8f (%d/%d)\n", etpr, *np, nobjects);
 	printf("	** cascade FPR=%.8f (%d/%lld)\n", efpr, *nn, (long long int)nw);
