@@ -27,6 +27,18 @@
 #include <malloc.h>
 #include <stdint.h>
 
+struct Detection
+{
+	int x;
+	int y;
+	int w;
+	int h;
+
+	int image_idx;
+	int obj_class;
+	float score;
+};
+
 // hyperparameters
 #define NRANDS 1024
 
@@ -133,7 +145,7 @@ int nbackground = 0;
 int background[MAX_N]; // i
 
 int nobjects = 0;
-int objects[MAX_N][4]; // (r, c, s, i)
+int objects[MAX_N][5]; // (x, y, w, h, i)
 
 static int cur_stage = 0;
 
@@ -191,11 +203,12 @@ int load_training_data(const char* path)
 		{
 			for(int i = 0; i < n; ++i)
 			{
-				fread(&objects[nobjects][0], sizeof(int), 1, file); // r
-				fread(&objects[nobjects][1], sizeof(int), 1, file); // c
-				fread(&objects[nobjects][2], sizeof(int), 1, file); // s
+				fread(&objects[nobjects][0], sizeof(int), 1, file); // x
+				fread(&objects[nobjects][1], sizeof(int), 1, file); // y
+				fread(&objects[nobjects][2], sizeof(int), 1, file); // w
+				fread(&objects[nobjects][3], sizeof(int), 1, file); // h
 
-				objects[nobjects][3] = N; // i
+				objects[nobjects][4] = N; // i
 				++nobjects;
 			}
 		}
@@ -229,7 +242,8 @@ int bintest(int32_t tcode, int r, int c, int sr, int sc, int iind)
 	return ppixels[iind][r1*pdims[iind][1]+c1]<=ppixels[iind][r2*pdims[iind][1]+c2];
 }
 
-float get_split_error(int32_t tcode, float tvals[], int rs[], int cs[], int srs[], int scs[], int iinds[], double ws[], int inds[], int indsnum)
+float get_split_error(int32_t tcode, const Detection *stage_objects,
+	int srs[], int scs[], double ws[], int inds[], int indsnum)
 {
 	double wsum, wsum0, wsum1;
 	double wtvalsum0, wtvalsumsqr0, wtvalsum1, wtvalsumsqr1;
@@ -238,29 +252,31 @@ float get_split_error(int32_t tcode, float tvals[], int rs[], int cs[], int srs[
 
 	for (int i = 0; i < indsnum; ++i)
 	{
-		if( bintest(tcode, rs[inds[i]], cs[inds[i]], srs[inds[i]], scs[inds[i]], iinds[inds[i]]) )
+		if (bintest(tcode, stage_objects[inds[i]].y, stage_objects[inds[i]].x,
+			srs[inds[i]], scs[inds[i]], stage_objects[inds[i]].image_idx))
 		{
 			wsum1 += ws[inds[i]];
-			wtvalsum1 += ws[inds[i]]*tvals[inds[i]];
-			wtvalsumsqr1 += ws[inds[i]]*SQR(tvals[inds[i]]);
+			wtvalsum1 += ws[inds[i]] * stage_objects[inds[i]].obj_class;
+			wtvalsumsqr1 += ws[inds[i]] * SQR(stage_objects[inds[i]].obj_class);
 		}
 		else
 		{
 			wsum0 += ws[inds[i]];
-			wtvalsum0 += ws[inds[i]]*tvals[inds[i]];
-			wtvalsumsqr0 += ws[inds[i]]*SQR(tvals[inds[i]]);
+			wtvalsum0 += ws[inds[i]] * stage_objects[inds[i]].obj_class;
+			wtvalsumsqr0 += ws[inds[i]] * SQR(stage_objects[inds[i]].obj_class);
 		}
 
 		wsum += ws[inds[i]];
 	}
 
-	double wmse0 = wtvalsumsqr0 - SQR(wtvalsum0)/wsum0;
-	double wmse1 = wtvalsumsqr1 - SQR(wtvalsum1)/wsum1;
+	double wmse0 = wtvalsumsqr0 - SQR(wtvalsum0) / wsum0;
+	double wmse1 = wtvalsumsqr1 - SQR(wtvalsum1) / wsum1;
 
-	return (float)( (wmse0 + wmse1)/wsum );
+	return (float)((wmse0 + wmse1) / wsum);
 }
 
-int split_training_data(int32_t tcode, float tvals[], int rs[], int cs[], int srs[], int scs[], int iinds[], double ws[], int inds[], int ninds)
+int split_training_data(int32_t tcode, const Detection *stage_objects,
+		int srs[], int scs[], double ws[], int inds[], int ninds)
 {
 	int stop = 0;
 	int i = 0;
@@ -268,7 +284,8 @@ int split_training_data(int32_t tcode, float tvals[], int rs[], int cs[], int sr
 
 	while (!stop)
 	{
-		while (!bintest(tcode, rs[inds[i]], cs[inds[i]], srs[inds[i]], scs[inds[i]], iinds[inds[i]]) )
+		while (!bintest(tcode, stage_objects[inds[i]].y, stage_objects[inds[i]].x,
+				srs[inds[i]], scs[inds[i]], stage_objects[inds[i]].image_idx))
 		{
 			if (i == j)
 				break;
@@ -276,7 +293,8 @@ int split_training_data(int32_t tcode, float tvals[], int rs[], int cs[], int sr
 				++i;
 		}
 
-		while (bintest(tcode, rs[inds[j]], cs[inds[j]], srs[inds[j]], scs[inds[j]], iinds[inds[j]]) )
+		while (bintest(tcode, stage_objects[inds[j]].y, stage_objects[inds[j]].x,
+				srs[inds[j]], scs[inds[j]], stage_objects[inds[j]].image_idx))
 		{
 			if (i == j)
 				break;
@@ -287,46 +305,40 @@ int split_training_data(int32_t tcode, float tvals[], int rs[], int cs[], int sr
 		if (i == j)
 			stop = 1;
 		else
-		{
-			// swap
-			inds[i] = inds[i] ^ inds[j];
-			inds[j] = inds[i] ^ inds[j];
-			inds[i] = inds[i] ^ inds[j];
-		}
+			std::swap(inds[i], inds[j]);
 	}
 
 	int n0 = 0;
-	for (i=0; i<ninds; ++i)
-		if (!bintest(tcode, rs[inds[i]], cs[inds[i]], srs[inds[i]], scs[inds[i]], iinds[inds[i]]))
+	for (i = 0; i < ninds; ++i)
+		if (!bintest(tcode, stage_objects[inds[i]].y, stage_objects[inds[i]].x,
+					srs[inds[i]], scs[inds[i]], stage_objects[inds[i]].image_idx))
 			++n0;
 
 	return n0;
 }
 
-int grow_subtree(int32_t tcodes[], float lut[], int nodeidx, int d, int maxd, float tvals[], int rs[], int cs[], int srs[], int scs[], int iinds[], double ws[], int inds[], int ninds)
+int grow_subtree(int32_t tcodes[], float lut[], int nodeidx, int d, int maxd,
+	const Detection *stage_objects, int srs[], int scs[],
+	double ws[], int inds[], int ninds)
 {
 	if (d == maxd)
 	{
-		int lutidx;
-		double tvalaccum, wsum;
-
-		//
-		lutidx = nodeidx - ((1<<maxd)-1);
+		int lutidx = nodeidx - ((1<<maxd)-1);
 
 		// compute output: a simple average
-		tvalaccum = 0.0;
-		wsum = 0.0;
+		double tvalaccum = 0.0;
+		double wsum = 0.0;
 
 		for(int i = 0; i < ninds; ++i)
 		{
-			tvalaccum += ws[inds[i]]*tvals[inds[i]];
+			tvalaccum += ws[inds[i]] * stage_objects[inds[i]].obj_class;
 			wsum += ws[inds[i]];
 		}
 
 		if (wsum == 0.0)
 			lut[lutidx] = 0.0f;
 		else
-			lut[lutidx] = (float)( tvalaccum/wsum );
+			lut[lutidx] = (float)(tvalaccum / wsum);
 
 		return 1;
 	}
@@ -334,8 +346,8 @@ int grow_subtree(int32_t tcodes[], float lut[], int nodeidx, int d, int maxd, fl
 	{
 		tcodes[nodeidx] = 0;
 
-		grow_subtree(tcodes, lut, 2*nodeidx+1, d+1, maxd, tvals, rs, cs, srs, scs, iinds, ws, inds, ninds);
-		grow_subtree(tcodes, lut, 2*nodeidx+2, d+1, maxd, tvals, rs, cs, srs, scs, iinds, ws, inds, ninds);
+		grow_subtree(tcodes, lut, 2*nodeidx+1, d+1, maxd, stage_objects, srs, scs, ws, inds, ninds);
+		grow_subtree(tcodes, lut, 2*nodeidx+2, d+1, maxd, stage_objects, srs, scs, ws, inds, ninds);
 
 		return 1;
 	}
@@ -349,7 +361,7 @@ int grow_subtree(int32_t tcodes[], float lut[], int nodeidx, int d, int maxd, fl
 	float es[2048];
 	#pragma omp parallel for
 	for (int i = 0; i < nrands; ++i)
-		es[i] = get_split_error(tmptcodes[i], tvals, rs, cs, srs, scs, iinds, ws, inds, ninds);
+		es[i] = get_split_error(tmptcodes[i], stage_objects, srs, scs, ws, inds, ninds);
 
 	float e = es[0];
 	tcodes[nodeidx] = tmptcodes[0];
@@ -361,15 +373,17 @@ int grow_subtree(int32_t tcodes[], float lut[], int nodeidx, int d, int maxd, fl
 			tcodes[nodeidx] = tmptcodes[i];
 		}
 
-	int n0 = split_training_data(tcodes[nodeidx], tvals, rs, cs, srs, scs, iinds, ws, inds, ninds);
+	int n0 = split_training_data(tcodes[nodeidx], stage_objects, srs, scs, ws, inds, ninds);
 
-	grow_subtree(tcodes, lut, 2*nodeidx+1, d+1, maxd, tvals, rs, cs, srs, scs, iinds, ws, &inds[0], n0);
-	grow_subtree(tcodes, lut, 2*nodeidx+2, d+1, maxd, tvals, rs, cs, srs, scs, iinds, ws, &inds[n0], ninds-n0);
+	grow_subtree(tcodes, lut, 2*nodeidx+1, d+1, maxd, stage_objects, srs, scs, ws, &inds[0], n0);
+	grow_subtree(tcodes, lut, 2*nodeidx+2, d+1, maxd, stage_objects, srs, scs, ws, &inds[n0], ninds-n0);
 
 	return 1;
 }
 
-int grow_rtree(int32_t tcodes[], float lut[], int d, float tvals[], int rs[], int cs[], int srs[], int scs[], int iinds[], double ws[], int n)
+int grow_rtree(int32_t tcodes[], float lut[], int d,
+	const Detection *stage_objects,
+	int srs[], int scs[], double ws[], int n)
 {
 	printf("	**growing tree... ");
 	int* inds = (int*)malloc(n*sizeof(int));
@@ -377,7 +391,7 @@ int grow_rtree(int32_t tcodes[], float lut[], int d, float tvals[], int rs[], in
 	for (int i = 0; i < n; ++i)
 		inds[i] = i;
 
-	int ret = grow_subtree(tcodes, lut, 0, 0, d, tvals, rs, cs, srs, scs, iinds, ws, inds, n);
+	int ret = grow_subtree(tcodes, lut, 0, 0, d, stage_objects, srs, scs, ws, inds, n);
 	free(inds);
 	printf("OK\r");
 	return ret;
@@ -451,13 +465,13 @@ float get_tree_output(int i, int r, int c, int sr, int sc, int iind)
 	return luts[i][idx - (1<<tdepth)];
 }
 
-int classify_region(float* o, int r, int c, int s, int iind)
+int classify_region(float* o, int r, int c, int w, int h, int iind)
 {
 	if (!ntrees)
 		return 1;
 
-	int sr = (int)(tsr*s);
-	int sc = (int)(tsc*s);
+	int sr = (int)(tsr * h);
+	int sc = (int)(tsc * w);
 
 	*o = 0.0f;
 
@@ -471,8 +485,8 @@ int classify_region(float* o, int r, int c, int s, int iind)
 	return 1;
 }
 
-int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
-	int rs[], int cs[], int ss[], int iinds[], float os[], int np, int nn)
+int learn_new_stage(float mintpr, float maxfpr, int maxntrees,
+	Detection *stage_objects, int np, int nn)
 {
 	printf("* learning stage %d...\n", ++cur_stage);
 	fflush(stdout);
@@ -482,8 +496,8 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 
 	for (int i = 0; i < np + nn; ++i)
 	{
-		srs[i] = (int)( tsr*ss[i] );
-		scs[i] = (int)( tsc*ss[i] );
+		srs[i] = int(tsr * stage_objects[i].h);
+		scs[i] = int(tsc * stage_objects[i].w);
 	}
 
 	double* ws = (double*)malloc((np+nn)*sizeof(double));
@@ -498,10 +512,10 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 		double wsum = 0.0;
 		for (int i = 0; i < np + nn; ++i)
 		{
-			if (tvals[i] > 0)
-				ws[i] = exp(-1.0 * os[i]) / np;
+			if (stage_objects[i].obj_class > 0)
+				ws[i] = exp(-1.0 * stage_objects[i].score) / np;
 			else
-				ws[i] = exp(+1.0 * os[i]) / nn;
+				ws[i] = exp(+1.0 * stage_objects[i].score) / nn;
 
 			wsum += ws[i];
 		}
@@ -511,12 +525,16 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 			ws[i] /= wsum;
 
 		// grow a tree
-		grow_rtree(tcodes[ntrees], luts[ntrees], tdepth, tvals, rs, cs, srs, scs, iinds, ws, np+nn);
+		grow_rtree(tcodes[ntrees], luts[ntrees], tdepth, stage_objects,
+				srs, scs, ws, np + nn);
 		thresholds[ntrees++] = -1337.0f;
 
 		// update outputs
 		for (int i = 0; i < np + nn; ++i)
-			os[i] += get_tree_output(ntrees - 1, rs[i], cs[i], srs[i], scs[i], iinds[i]);
+			stage_objects[i].score += get_tree_output(ntrees - 1,
+						stage_objects[i].y,
+						stage_objects[i].x,
+						srs[i], scs[i], stage_objects[i].image_idx);
 
 		// get threshold
 		float threshold = 5.0f;
@@ -532,9 +550,9 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 
 			for (int s = 0; s < np + nn; ++s)
 			{
-				if (tvals[s] > 0 && os[s] > threshold)
+				if (stage_objects[s].obj_class > 0 && stage_objects[s].score > threshold)
 					++numtps;
-				if (tvals[s] < 0 && os[s] > threshold)
+				if (stage_objects[s].obj_class < 0 && stage_objects[s].score > threshold)
 					++numfps;
 			}
 
@@ -543,8 +561,8 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 		}
 		if (it == maxiter)
 		{
-			printf("	** MAX ITERATIONS, see os.dump\n");
-			dump_floats("os.dump", os, np + nn);
+			printf("	** MAX ITERATIONS\n");
+			//dump_floats("os.dump", os, np + nn);
 		}
 
 		thresholds[ntrees - 1] = threshold;
@@ -563,8 +581,7 @@ int learn_new_stage(float mintpr, float maxfpr, int maxntrees, float tvals[],
 	return 1;
 }
 
-float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
-	int iinds[], float os[], int* np, int* nn)
+float sample_training_data(Detection *stage_objects, int* np, int* nn)
 {
 	printf("* sampling data...\n");
 	fflush(stdout);
@@ -572,6 +589,13 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	#define NUMPRNGS 1024
 	static int prngsinitialized = 0;
 	static uint64_t prngs[NUMPRNGS];
+	if (!prngsinitialized)
+	{
+		// initialize a PRNG for each thread
+		for (int i = 0; i < NUMPRNGS; ++i)
+			prngs[i] = 0xFFFF * mwcrand() + 0xFFFF1234FFFF0001LL * mwcrand();
+		prngsinitialized = 1;
+	}
 
 	int t = getticks();
 	int n = 0;
@@ -582,15 +606,16 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	fflush(stdout);
 	for (int i = 0; i < nobjects; ++i)
 	{
-		if (classify_region(&os[n], objects[i][0], objects[i][1], objects[i][2], objects[i][3]) == 1)
+		if (classify_region(&stage_objects->score, objects[i][1], objects[i][0],
+			objects[i][2], objects[i][3], objects[i][4]) == 1)
 		{
-			rs[n] = objects[i][0];
-			cs[n] = objects[i][1];
-			ss[n] = objects[i][2];
-
-			iinds[n] = objects[i][3];
-			tvals[n] = +1;
-
+			stage_objects->x = objects[i][0];
+			stage_objects->y = objects[i][1];
+			stage_objects->w = objects[i][2];
+			stage_objects->h = objects[i][3];
+			stage_objects->image_idx = objects[i][4];
+			stage_objects->obj_class = 1;
+			++stage_objects;
 			++n;
 		}
 	}
@@ -598,15 +623,6 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	*np = n;
 
 	// non-object samples
-	if (!prngsinitialized)
-	{
-		// initialize a PRNG for each thread
-		for (int i=0; i<NUMPRNGS; ++i)
-			prngs[i] = 0xFFFF*mwcrand() + 0xFFFF1234FFFF0001LL*mwcrand();
-
-		prngsinitialized = 1;
-	}
-
 	int64_t nw = 0;
 	int64_t stop_nw = int64_t(*np) * 10000000;  // 1e-7 fpr
 	*nn = 0;
@@ -628,27 +644,28 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 				int iind = background[mwcrand_r(&prngs[thid]) % nbackground];
 
 				// sample the size of a random object in the pool
-				int r = mwcrand_r(&prngs[thid]) % pdims[iind][0];
-				int c = mwcrand_r(&prngs[thid]) % pdims[iind][1];
-				int s = objects[mwcrand_r(&prngs[thid]) % nobjects][2];
+				int obj_num = mwcrand_r(&prngs[thid]) % nobjects;
+				int obj_w = objects[obj_num][2];
+				int obj_h = objects[obj_num][3];
+				int obj_x = mwcrand_r(&prngs[thid]) % (pdims[iind][1] - obj_w);
+				int obj_y = mwcrand_r(&prngs[thid]) % (pdims[iind][0] - obj_h);
 
 				float o;
-				if (classify_region(&o, r, c, s, iind) == 1)
+				if (classify_region(&o, obj_y, obj_x, obj_w, obj_h, iind) == 1)
 				{
 					// we have a false positive ...
 					#pragma omp critical
 					{
 						if (*nn < *np && nw < stop_nw)
 						{
-							rs[n] = r;
-							cs[n] = c;
-							ss[n] = s;
-
-							iinds[n] = iind;
-
-							os[n] = o;
-
-							tvals[n] = -1;
+							stage_objects->x = obj_x;
+							stage_objects->y = obj_y;
+							stage_objects->w = obj_w;
+							stage_objects->h = obj_h;
+							stage_objects->image_idx = iind;
+							stage_objects->obj_class = -1;
+							stage_objects->score = 0;
+							++stage_objects;
 
 							++n;
 							++*nn;
@@ -678,10 +695,6 @@ float sample_training_data(float tvals[], int rs[], int cs[], int ss[],
 	else
 		nw = 1;
 
-	/*
-		print the estimated true positive and false positive rates
-	*/
-
 	float etpr = *np / (float)nobjects;
 	float efpr = (float)(*nn / (double)nw);
 
@@ -700,6 +713,7 @@ static int ss[2*MAX_N];
 static int iinds[2*MAX_N];
 static float tvals[2*MAX_N];
 static float os[2*MAX_N];
+static Detection stage_objects[2 * MAX_N];
 
 bool learn_with_default_parameters(const char* trdata, const char* dst)
 {
@@ -713,29 +727,29 @@ bool learn_with_default_parameters(const char* trdata, const char* dst)
 		return false;
 
 	int np, nn;
-	sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn);
-	learn_new_stage(0.9800f, 0.5f, 4, tvals, rs, cs, ss, iinds, os, np, nn);
+	sample_training_data(stage_objects, &np, &nn);
+	learn_new_stage(0.9800f, 0.5f, 4, stage_objects, np, nn);
 	save_cascade_to_file(dst);
 	printf("\n");
 
-	sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn);
-	learn_new_stage(0.9850f, 0.5f, 8, tvals, rs, cs, ss, iinds, os, np, nn);
+	sample_training_data(stage_objects, &np, &nn);
+	learn_new_stage(0.9850f, 0.5f, 8, stage_objects, np, nn);
 	save_cascade_to_file(dst);
 	printf("\n");
 
-	sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn);
-	learn_new_stage(0.9900f, 0.5f, 16, tvals, rs, cs, ss, iinds, os, np, nn);
+	sample_training_data(stage_objects, &np, &nn);
+	learn_new_stage(0.9900f, 0.5f, 16, stage_objects, np, nn);
 	save_cascade_to_file(dst);
 	printf("\n");
 
-	sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn);
-	learn_new_stage(0.9950f, 0.5f, 32, tvals, rs, cs, ss, iinds, os, np, nn);
+	sample_training_data(stage_objects, &np, &nn);
+	learn_new_stage(0.9950f, 0.5f, 32, stage_objects, np, nn);
 	save_cascade_to_file(dst);
 	printf("\n");
 
-	while (sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn) > 1e-6f)
+	while (sample_training_data(stage_objects, &np, &nn) > 1e-6f)
 	{
-		learn_new_stage(0.9975f, 0.5f, 64, tvals, rs, cs, ss, iinds, os, np, nn);
+		learn_new_stage(0.9975f, 0.5f, 64, stage_objects, np, nn);
 		save_cascade_to_file(dst);
 		printf("\n");
 	}
@@ -871,8 +885,8 @@ int main(int argc, char* argv[])
 		}
 
 		int np, nn;
-		sample_training_data(tvals, rs, cs, ss, iinds, os, &np, &nn);
-		learn_new_stage(tpr, fpr, ntrees, tvals, rs, cs, ss, iinds, os, np, nn);
+		sample_training_data(stage_objects, &np, &nn);
+		learn_new_stage(tpr, fpr, ntrees, stage_objects, np, nn);
 
 		if (!save_cascade_to_file(cascade_file_name.c_str()))
 			return 1;
