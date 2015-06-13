@@ -707,12 +707,6 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 	return efpr;
 }
 
-static int rs[2*MAX_N];
-static int cs[2*MAX_N];
-static int ss[2*MAX_N];
-static int iinds[2*MAX_N];
-static float tvals[2*MAX_N];
-static float os[2*MAX_N];
 static Detection stage_objects[2 * MAX_N];
 
 bool learn_with_default_parameters(const char* trdata, const char* dst)
