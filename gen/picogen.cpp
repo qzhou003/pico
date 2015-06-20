@@ -131,8 +131,6 @@ void print_c_code(const char* name, double rotation, bool cuda)
 	{
 		print_func_name_c(name);
 		printf("{\n");
-		printf("	int i, idx;\n");
-		printf("\n");
 	}
 
 	if (cuda)
@@ -224,9 +222,9 @@ void print_c_code(const char* name, double rotation, bool cuda)
 
 	printf("	*o = 0.0f;\n\n");
 	// printf("	pixels = &pixels[r*ldim+c];\n");
-	printf("	for (i = 0; i < %d; ++i)\n", ntrees);
+	printf("	for (int i = 0; i < %d; ++i)\n", ntrees);
 	printf("	{\n");
-	printf("		idx = 1;\n");
+	printf("		int idx = 1;\n");
 	for (int i = 0; i < tdepth; ++i)
 	{
 		printf("		idx = 2*idx + (pixels[(r+tcodes[i][idx][0]*sr)/256*ldim + (c+tcodes[i][idx][1]*sc)/256]<=pixels[(r+tcodes[i][idx][2]*sr)/256*ldim + (c+tcodes[i][idx][3]*sc)/256]);\n");
@@ -242,7 +240,7 @@ void print_c_code(const char* name, double rotation, bool cuda)
 		printf("		}\n");
 	}
 	else
-		printf("		return -1;\n");
+		printf("			return -1;\n");
 	printf("	}\n");
 
 	printf("\n	*o -= thresholds[%d];\n", ntrees - 1);
