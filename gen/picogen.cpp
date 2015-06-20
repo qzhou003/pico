@@ -256,8 +256,9 @@ void print_c_code(const char* name, double rotation, bool cuda)
 void usage(const char *prog_name)
 {
 	printf("Usage:\n");
-	printf("%s [-r rotation_angle] [-s threshold_shift] [--cuda] <cascade> "
-		   "<detection function name>\n", prog_name);
+	printf("%s [-r rotation_angle] [-s threshold_shift] "
+		   "[-sr scale_row] [-sc scale_col] [--cuda] "
+		   "<cascade>  <detection function name>\n", prog_name);
 }
 
 int main(int argc, char* argv[])
@@ -266,30 +267,44 @@ int main(int argc, char* argv[])
 	std::string func_name;
 	double th_shift = 0;
 	double rotation = 0;
+	double scale_row = 1.0;
+	double scale_col = 1.0;
 	bool use_cuda = false;
 	int opt_count = 1;
 	while (opt_count < argc)
 	{
-		if (std::string(argv[opt_count]) == "-r")
+		if (std::string(argv[opt_count]) == "-h")
+		{
+			usage(argv[0]);
+			return 0;
+		}
+		else if (std::string(argv[opt_count]) == "-r")
 		{
 			++opt_count;
 			if (opt_count < argc)
-				rotation = atof(argv[opt_count + 1]);
+				rotation = atof(argv[opt_count]);
 		}
 		else if (std::string(argv[opt_count]) == "-s")
 		{
 			++opt_count;
 			if (opt_count < argc)
-				th_shift = atof(argv[opt_count + 1]);
+				th_shift = atof(argv[opt_count]);
 		}
 		else if (std::string(argv[opt_count]) == "--cuda")
 		{
 			use_cuda = true;
 		}
-		else if (std::string(argv[opt_count]) == "-h")
+		else if (std::string(argv[opt_count]) == "-sr")
 		{
-			usage(argv[0]);
-			return 0;
+			++opt_count;
+			if (opt_count < argc)
+				scale_row = atof(argv[opt_count]);
+		}
+		else if (std::string(argv[opt_count]) == "-sc")
+		{
+			++opt_count;
+			if (opt_count < argc)
+				scale_col = atof(argv[opt_count]);
 		}
 		else if (argv[opt_count][0] == '-')
 		{
@@ -321,6 +336,9 @@ int main(int argc, char* argv[])
 		printf("ERROR: can't load cascade %s\n", cascade_name.c_str());
 		return -2;
 	}
+
+	tsr *= scale_row;
+	tsc *= scale_col;
 
 	print_c_code(func_name.c_str(), rotation, use_cuda);
 	return 0;
