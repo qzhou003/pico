@@ -88,7 +88,7 @@ void print_func_name_cuda(const char *name)
 	printf("__global__ void %s_cuda(float* response, unsigned char *result, "
 		"int s, const unsigned char* pixels, "
 		"int nrows, int ncols, int ldim, "
-		"float dr, float dc, int res_cols)\n", name);
+		"float dr, float dc, int res_cols)\n{\n", name);
 }
 
 void print_func_name_c(const char *name)
@@ -134,7 +134,7 @@ void print_c_code(const char* name, double rotation, bool cuda)
 	}
 
 	if (cuda)
-		printf("	__device__ short tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
+		printf("__device__ short tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
 	else
 		printf("	static int16_t tcodes[%d][%d][4] =\n", ntrees, 1<<tdepth);
 
@@ -150,7 +150,7 @@ void print_c_code(const char* name, double rotation, bool cuda)
 
 	printf("\n");
 	if (cuda)
-		printf("	__device__ float lut[%d][%d] =\n", ntrees, 1<<tdepth);
+		printf("__device__ float lut[%d][%d] =\n", ntrees, 1<<tdepth);
 	else
 		printf("	static float lut[%d][%d] =\n", ntrees, 1<<tdepth);
 	printf("	{\n");
@@ -165,24 +165,18 @@ void print_c_code(const char* name, double rotation, bool cuda)
 
 	printf("\n");
 	if (cuda)
-		printf("	__device__ float thresholds[%d] =\n", ntrees);
+		printf("__device__ float thresholds[%d] =\n", ntrees);
 	else
 		printf("	static float thresholds[%d] =\n", ntrees);
 	printf("	{\n\t\t");
 	for (int i = 0; i < ntrees - 1; ++i)
 		printf("%ff, ", thresholds[i]);
 	printf("%ff\n", thresholds[ntrees-1]);
-	printf("	};\n");
+	printf("	};\n\n");
 
 	if (cuda)
-	{
 		print_func_name_cuda(name);
-		printf("{\n");
-		printf("	int i, idx;\n");
-		printf("\n");
-	}
 
-	printf("\n");
 	printf("	int sr = (int)(%ff*s);\n", tsr);
 	printf("	int sc = (int)(%ff*s);\n", tsc);
 
