@@ -426,13 +426,13 @@ int load_cascade_from_file(const char* path)
 	return 1;
 }
 
-int save_cascade_to_file(const char* path)
+bool save_cascade_to_file(const char* path)
 {
 	printf("* saving cascade...");
 	fflush(stdout);
 	FILE* file = fopen(path, "wb");
 	if (!file)
-		return 0;
+		return false;
 
 	fwrite(&tsr, sizeof(float), 1, file);
 	fwrite(&tsc, sizeof(float), 1, file);
@@ -449,7 +449,7 @@ int save_cascade_to_file(const char* path)
 	fclose(file);
 	printf("OK\n");
 	fflush(stdout);
-	return 1;
+	return true;
 }
 
 float get_tree_output(int i, int r, int c, int sr, int sc, int iind)
@@ -714,8 +714,13 @@ bool learn_with_default_parameters(const char* trdata, const char* dst)
 		return false;
 	}
 
-	if (!save_cascade_to_file(dst))
+	if (load_cascade_from_file(dst))
+		printf("Cascade '%s' loaded, continuing training\n", dst);
+	else if (!save_cascade_to_file(dst))
+	{
+		printf("* cannot save cascade to '%s', ABORTING\n", dst);
 		return false;
+	}
 
 	int np, nn;
 	sample_training_data(stage_objects, &np, &nn);
@@ -854,7 +859,7 @@ int main(int argc, char* argv[])
 	{
 		ntrees = 0;
 		if (!save_cascade_to_file(cascade_file_name.c_str()))
-			return 0;
+			return -1;
 
 		printf("* initializing: (%f, %f, %d)\n", tsr, tsc, tdepth);
 		return 0;
@@ -865,7 +870,12 @@ int main(int argc, char* argv[])
 		{
 			printf("* cannot load a cascade from '%s', creating new one\n",
 				   cascade_file_name.c_str());
-			save_cascade_to_file(cascade_file_name.c_str());
+			if (!save_cascade_to_file(cascade_file_name.c_str()))
+			{
+				printf("* cannot save cascade to '%s', ABORTING\n",
+						cascade_file_name.c_str());
+				return -1;
+			}
 		}
 
 		if (!load_training_data(data_file_name.c_str()))
@@ -880,7 +890,11 @@ int main(int argc, char* argv[])
 		learn_new_stage(tpr, fpr, ntrees, stage_objects, np, nn);
 
 		if (!save_cascade_to_file(cascade_file_name.c_str()))
-			return 1;
+		{
+			printf("* cannot save cascade to '%s', ABORTING\n",
+					cascade_file_name.c_str());
+			return -1;
+		}
 	}
 	else
 		learn_with_default_parameters(data_file_name.c_str(), cascade_file_name.c_str());
