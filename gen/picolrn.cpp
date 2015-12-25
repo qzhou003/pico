@@ -93,16 +93,13 @@ float getticks()
 
 uint32_t mwcrand_r(uint64_t* state)
 {
-	uint32_t* m;
-
-	//
-	m = (uint32_t*)state;
+	uint32_t* m = (uint32_t*)state;
 
 	// bad state?
-	if(m[0] == 0)
+	if (m[0] == 0)
 		m[0] = 0xAAAA;
 
-	if(m[1] == 0)
+	if (m[1] == 0)
 		m[1] = 0xBBBB;
 
 	// mutate state
@@ -117,7 +114,7 @@ uint64_t prngglobal = 0x12345678000fffffLL;
 
 void smwcrand(uint32_t seed)
 {
-	prngglobal = 0x12345678000fffffLL*seed;
+	prngglobal = 0x12345678000fffffLL * seed;
 }
 
 uint32_t mwcrand()
@@ -165,12 +162,12 @@ int load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
 	if (fread(ncols, sizeof(int), 1, file) != 1)
 		return 0;
 
-	*pixels = (uint8_t*)malloc(*nrows**ncols*sizeof(uint8_t));
+	*pixels = (uint8_t*)malloc(*nrows * *ncols * sizeof(uint8_t));
 	if (!*pixels)
 		return 0;
 
 	// read pixels
-	if (fread(*pixels, sizeof(uint8_t), *nrows**ncols, file) != *nrows**ncols)
+	if (fread(*pixels, sizeof(uint8_t), *nrows * *ncols, file) != *nrows * *ncols)
 		return 0;
 
 	// we're done
@@ -201,7 +198,7 @@ int load_training_data(const char* path)
 		}
 		else
 		{
-			for(int i = 0; i < n; ++i)
+			for (int i = 0; i < n; ++i)
 			{
 				fread(&objects[nobjects][0], sizeof(int), 1, file); // x
 				fread(&objects[nobjects][1], sizeof(int), 1, file); // y
