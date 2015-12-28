@@ -91,6 +91,7 @@ add_executable(picogen gen/picogen.cpp)
 #target_link_libraries(my-lib ${COMMON_LIBRARIES})
 
 add_executable(picolrn gen/picolrn.cpp)
+set_target_properties(picolrn PROPERTIES COMPILE_FLAGS "-fopenmp")
 set_target_properties(picolrn PROPERTIES LINK_FLAGS "-fopenmp")
 #add_dependencies(my-lib subproject)
 #target_link_libraries(picolrn
