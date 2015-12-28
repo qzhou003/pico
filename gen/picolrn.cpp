@@ -618,6 +618,7 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 	}
 
 	*np = n;
+	printf("Got %d positive samples\n", *np);
 
 	// non-object samples
 	int64_t nw = 0;
