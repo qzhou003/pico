@@ -20,6 +20,7 @@
 #include <omp.h>
 
 #include <string>
+#include <vector>
 
 #include <cstdio>
 #include <cmath>
@@ -42,7 +43,7 @@ struct Detection
 #define MAX_N 2000000
 struct Dataset
 {
-	uint8_t* ppixels[MAX_N];
+	std::vector<uint8_t> ppixels[MAX_N];
 	int pdims[MAX_N][2]; // (nrows, ncols)
 
 	int nbackground = 0;
@@ -147,7 +148,7 @@ void dump_floats(const std::string &filename, float *arr, int size)
 		fprintf(f, "%.5f\n", arr[i]);
 }
 
-bool load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
+bool load_image(std::vector<uint8_t> &pixels, int* nrows, int* ncols, FILE* file)
 {
 	/*
 	- loads an 8-bit grey image saved in the <RID> file format
@@ -163,12 +164,10 @@ bool load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
 	if (fread(ncols, sizeof(int), 1, file) != 1)
 		return false;
 
-	*pixels = (uint8_t*)malloc(*nrows * *ncols * sizeof(uint8_t));
-	if (!*pixels)
-		return false;
+	pixels.resize(*nrows * *ncols);
 
 	// read pixels
-	if (fread(*pixels, sizeof(uint8_t), *nrows * *ncols, file) != *nrows * *ncols)
+	if (fread(&pixels[0], sizeof(uint8_t), *nrows * *ncols, file) != *nrows * *ncols)
 		return false;
 
 	// we're done
@@ -187,7 +186,7 @@ int load_training_data(const char* path)
 	dataset.nobjects = 0;
 
 	while (load_image(
-			&dataset.ppixels[total_images],
+			dataset.ppixels[total_images],
 			&dataset.pdims[total_images][0],
 			&dataset.pdims[total_images][1],
 			file))
