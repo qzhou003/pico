@@ -43,11 +43,15 @@ struct Detection
 #define MAX_N 2000000
 struct Dataset
 {
+	Dataset()
+	{
+		background.reserve(MAX_N);
+	}
+
 	std::vector<uint8_t> ppixels[MAX_N];
 	int pdims[MAX_N][2]; // (nrows, ncols)
 
-	int nbackground = 0;
-	int background[MAX_N]; // i
+	std::vector<int> background;
 
 	int nobjects = 0;
 	int objects[MAX_N][5]; // (x, y, w, h, i)
@@ -182,7 +186,6 @@ int load_training_data(const char* path)
 
 	int total_images = 0;
 
-	dataset.nbackground = 0;
 	dataset.nobjects = 0;
 
 	while (load_image(
@@ -196,10 +199,7 @@ int load_training_data(const char* path)
 			return 1;
 
 		if (!n)
-		{
-			dataset.background[dataset.nbackground] = total_images;
-			++dataset.nbackground;
-		}
+			dataset.background.push_back(total_images);
 		else
 		{
 			for (int i = 0; i < n; ++i)
@@ -636,7 +636,7 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 	printf("* sampling negatives\n");
 	fflush(stdout);
 	int stop = 0;
-	if (dataset.nbackground)
+	if (!dataset.background.empty())
 	{
 		#pragma omp parallel
 		{
@@ -646,7 +646,8 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 			while (!stop)
 			{
 				// take random image
-				int iind = dataset.background[mwcrand_r(&prngs[thid]) % dataset.nbackground];
+				int iind = dataset.background[
+						mwcrand_r(&prngs[thid]) % dataset.background.size()];
 
 				// sample the size of a random object in the pool
 				int obj_num = mwcrand_r(&prngs[thid]) % dataset.nobjects;
