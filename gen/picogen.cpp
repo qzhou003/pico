@@ -54,7 +54,7 @@ bool load_cascade(const char* path, double threshold_shift)
 		fread(&luts[i][0], sizeof(float), 1<<tdepth, file);
 		fread(&thresholds[i], sizeof(float), 1, file);
 		if (threshold_shift)
-			thresholds[i] -= fabs(thresholds[i]) * threshold_shift;
+			thresholds[i] -= fabs(thresholds[i]) * threshold_shift * i / float(ntrees);
 	}
 
 	fclose(file);
@@ -259,7 +259,13 @@ int main(int argc, char* argv[])
 {
 	std::string cascade_name;
 	std::string func_name;
+
+	// positive will get more detections (better sensitivity)
+	// negative will get less detections (better specifity)
+	// linear dependency (from 0 for the first tree to 1 for last one)
+	// 1.0 shift corresponds shifting by threshold value for last tree
 	double th_shift = 0;
+
 	double rotation = 0;
 	double scale_row = 1.0;
 	double scale_col = 1.0;
