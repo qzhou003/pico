@@ -39,6 +39,21 @@ struct Detection
 	float score;
 };
 
+#define MAX_N 2000000
+struct Dataset
+{
+	uint8_t* ppixels[MAX_N];
+	int pdims[MAX_N][2]; // (nrows, ncols)
+
+	int nbackground = 0;
+	int background[MAX_N]; // i
+
+	int nobjects = 0;
+	int objects[MAX_N][5]; // (x, y, w, h, i)
+};
+static Dataset dataset;
+static int cur_stage = 0;
+
 // hyperparameters
 #define NRANDS 1024
 
@@ -132,19 +147,6 @@ void dump_floats(const std::string &filename, float *arr, int size)
 		fprintf(f, "%.5f\n", arr[i]);
 }
 
-#define MAX_N 2000000
-
-uint8_t* ppixels[MAX_N];
-int pdims[MAX_N][2]; // (nrows, ncols)
-
-int nbackground = 0;
-int background[MAX_N]; // i
-
-int nobjects = 0;
-int objects[MAX_N][5]; // (x, y, w, h, i)
-
-static int cur_stage = 0;
-
 bool load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
 {
 	/*
@@ -181,13 +183,13 @@ int load_training_data(const char* path)
 
 	int total_images = 0;
 
-	nbackground = 0;
-	nobjects = 0;
+	dataset.nbackground = 0;
+	dataset.nobjects = 0;
 
 	while (load_image(
-			&ppixels[total_images],
-			&pdims[total_images][0],
-			&pdims[total_images][1],
+			&dataset.ppixels[total_images],
+			&dataset.pdims[total_images][0],
+			&dataset.pdims[total_images][1],
 			file))
 	{
 		int n = 0;
@@ -196,20 +198,20 @@ int load_training_data(const char* path)
 
 		if (!n)
 		{
-			background[nbackground] = total_images;
-			++nbackground;
+			dataset.background[dataset.nbackground] = total_images;
+			++dataset.nbackground;
 		}
 		else
 		{
 			for (int i = 0; i < n; ++i)
 			{
-				fread(&objects[nobjects][0], sizeof(int), 1, file); // x
-				fread(&objects[nobjects][1], sizeof(int), 1, file); // y
-				fread(&objects[nobjects][2], sizeof(int), 1, file); // w
-				fread(&objects[nobjects][3], sizeof(int), 1, file); // h
+				fread(&dataset.objects[dataset.nobjects][0], sizeof(int), 1, file); // x
+				fread(&dataset.objects[dataset.nobjects][1], sizeof(int), 1, file); // y
+				fread(&dataset.objects[dataset.nobjects][2], sizeof(int), 1, file); // w
+				fread(&dataset.objects[dataset.nobjects][3], sizeof(int), 1, file); // h
 
-				objects[nobjects][4] = total_images; // i
-				++nobjects;
+				dataset.objects[dataset.nobjects][4] = total_images; // i
+				++dataset.nobjects;
 			}
 		}
 
@@ -233,13 +235,14 @@ int bintest(int32_t tcode, int r, int c, int sr, int sc, int iind)
 	int r2 = (256*r + p[2]*sr)/256;
 	int c2 = (256*c + p[3]*sc)/256;
 
-	r1 = MIN(MAX(0, r1), pdims[iind][0]-1);
-	c1 = MIN(MAX(0, c1), pdims[iind][1]-1);
+	r1 = MIN(MAX(0, r1), dataset.pdims[iind][0]-1);
+	c1 = MIN(MAX(0, c1), dataset.pdims[iind][1]-1);
 
-	r2 = MIN(MAX(0, r2), pdims[iind][0]-1);
-	c2 = MIN(MAX(0, c2), pdims[iind][1]-1);
+	r2 = MIN(MAX(0, r2), dataset.pdims[iind][0]-1);
+	c2 = MIN(MAX(0, c2), dataset.pdims[iind][1]-1);
 
-	return ppixels[iind][r1*pdims[iind][1]+c1]<=ppixels[iind][r2*pdims[iind][1]+c2];
+	return dataset.ppixels[iind][r1 * dataset.pdims[iind][1]+c1] <=
+			dataset.ppixels[iind][r2 * dataset.pdims[iind][1]+c2];
 }
 
 float get_split_error(int32_t tcode, const Detection *stage_objects,
@@ -604,16 +607,18 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 	// object samples
 	printf("* sampling positives...\n");
 	fflush(stdout);
-	for (int i = 0; i < nobjects; ++i)
+	for (int i = 0; i < dataset.nobjects; ++i)
 	{
-		if (classify_region(&stage_objects->score, objects[i][1], objects[i][0],
-			objects[i][2], objects[i][3], objects[i][4]) == 1)
+		if (classify_region(&stage_objects->score,
+					dataset.objects[i][1], dataset.objects[i][0],
+					dataset.objects[i][2], dataset.objects[i][3],
+					dataset.objects[i][4]) == 1)
 		{
-			stage_objects->x = objects[i][0];
-			stage_objects->y = objects[i][1];
-			stage_objects->w = objects[i][2];
-			stage_objects->h = objects[i][3];
-			stage_objects->image_idx = objects[i][4];
+			stage_objects->x = dataset.objects[i][0];
+			stage_objects->y = dataset.objects[i][1];
+			stage_objects->w = dataset.objects[i][2];
+			stage_objects->h = dataset.objects[i][3];
+			stage_objects->image_idx = dataset.objects[i][4];
 			stage_objects->obj_class = 1;
 			++stage_objects;
 			++n;
@@ -632,7 +637,7 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 	printf("* sampling negatives\n");
 	fflush(stdout);
 	int stop = 0;
-	if (nbackground)
+	if (dataset.nbackground)
 	{
 		#pragma omp parallel
 		{
@@ -642,14 +647,14 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 			while (!stop)
 			{
 				// take random image
-				int iind = background[mwcrand_r(&prngs[thid]) % nbackground];
+				int iind = dataset.background[mwcrand_r(&prngs[thid]) % dataset.nbackground];
 
 				// sample the size of a random object in the pool
-				int obj_num = mwcrand_r(&prngs[thid]) % nobjects;
-				int obj_w = objects[obj_num][2];
-				int obj_h = objects[obj_num][3];
-				int obj_x = mwcrand_r(&prngs[thid]) % (pdims[iind][1] - obj_w);
-				int obj_y = mwcrand_r(&prngs[thid]) % (pdims[iind][0] - obj_h);
+				int obj_num = mwcrand_r(&prngs[thid]) % dataset.nobjects;
+				int obj_w = dataset.objects[obj_num][2];
+				int obj_h = dataset.objects[obj_num][3];
+				int obj_x = mwcrand_r(&prngs[thid]) % (dataset.pdims[iind][1] - obj_w);
+				int obj_y = mwcrand_r(&prngs[thid]) % (dataset.pdims[iind][0] - obj_h);
 
 				float o;
 				if (classify_region(&o, obj_y, obj_x, obj_w, obj_h, iind) == 1)
@@ -696,12 +701,12 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 	else
 		nw = 1;
 
-	float etpr = *np / (float)nobjects;
+	float etpr = *np / (float)dataset.nobjects;
 	float efpr = (float)(*nn / (double)nw);
 
 	printf("* sampling finished\n");
 	printf("	** elapsed time: %.2f s\n", getticks() - t);
-	printf("	** cascade TPR=%.8f (%d/%d)\n", etpr, *np, nobjects);
+	printf("	** cascade TPR=%.8f (%d/%d)\n", etpr, *np, dataset.nobjects);
 	printf("	** cascade FPR=%.8f (%d/%lld)\n", efpr, *nn, (long long int)nw);
 	fflush(stdout);
 
