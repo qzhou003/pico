@@ -134,7 +134,6 @@ void dump_floats(const std::string &filename, float *arr, int size)
 
 #define MAX_N 2000000
 
-int N = 0;
 uint8_t* ppixels[MAX_N];
 int pdims[MAX_N][2]; // (nrows, ncols)
 
@@ -146,7 +145,7 @@ int objects[MAX_N][5]; // (x, y, w, h, i)
 
 static int cur_stage = 0;
 
-int load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
+bool load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
 {
 	/*
 	- loads an 8-bit grey image saved in the <RID> file format
@@ -157,21 +156,21 @@ int load_image(uint8_t* pixels[], int* nrows, int* ncols, FILE* file)
 	*/
 
 	if (fread(nrows, sizeof(int), 1, file) != 1)
-		return 0;
+		return false;
 
 	if (fread(ncols, sizeof(int), 1, file) != 1)
-		return 0;
+		return false;
 
 	*pixels = (uint8_t*)malloc(*nrows * *ncols * sizeof(uint8_t));
 	if (!*pixels)
-		return 0;
+		return false;
 
 	// read pixels
 	if (fread(*pixels, sizeof(uint8_t), *nrows * *ncols, file) != *nrows * *ncols)
-		return 0;
+		return false;
 
 	// we're done
-	return 1;
+	return true;
 }
 
 int load_training_data(const char* path)
@@ -180,12 +179,16 @@ int load_training_data(const char* path)
 	if (!file)
 		return 0;
 
-	N = 0;
+	int total_images = 0;
 
 	nbackground = 0;
 	nobjects = 0;
 
-	while (load_image(&ppixels[N], &pdims[N][0], &pdims[N][1], file))
+	while (load_image(
+			&ppixels[total_images],
+			&pdims[total_images][0],
+			&pdims[total_images][1],
+			file))
 	{
 		int n = 0;
 		if (fread(&n, sizeof(int), 1, file) != 1)
@@ -193,7 +196,7 @@ int load_training_data(const char* path)
 
 		if (!n)
 		{
-			background[nbackground] = N;
+			background[nbackground] = total_images;
 			++nbackground;
 		}
 		else
@@ -205,12 +208,12 @@ int load_training_data(const char* path)
 				fread(&objects[nobjects][2], sizeof(int), 1, file); // w
 				fread(&objects[nobjects][3], sizeof(int), 1, file); // h
 
-				objects[nobjects][4] = N; // i
+				objects[nobjects][4] = total_images; // i
 				++nobjects;
 			}
 		}
 
-		++N;
+		++total_images;
 	}
 
 	return 1;
