@@ -52,8 +52,16 @@ struct Dataset
 	std::vector<uint8_t> ppixels[MAX_N];
 	int pdims[MAX_N][2]; // (nrows, ncols)
 
-	std::vector<int> background;  // indexes of images in ppixels
-	std::vector<Detection> objects;  // objects parameters related to ppixels
+	// indexes of images in ppixels
+	// negatives should be sampled from these images
+	std::vector<int> background;
+
+	// positive samples
+	// image_idx is related to ppixels
+	std::vector<Detection> objects;
+
+	// hard negatives (whole image is a negative sample)
+	std::vector<int> negatives;
 };
 static Dataset dataset;
 static int cur_stage = 0;
@@ -151,16 +159,22 @@ void dump_floats(const std::string &filename, float *arr, int size)
 		fprintf(f, "%.5f\n", arr[i]);
 }
 
+/*
+- loads an 8-bit grey image saved in the <RID> file format
+- <RID> file contents:
+	- a 32-bit signed integer h (image height)
+	- a 32-bit signed integer w (image width)
+	- an array of w*h unsigned bytes representing pixel intensities
+	- image type (0: background, -1: hard negative, >0: positives)
+	- if image type > 0, n times:
+		- x
+		- y
+		- w
+		- h
+*/
+
 bool load_image(std::vector<uint8_t> &pixels, int* nrows, int* ncols, FILE* file)
 {
-	/*
-	- loads an 8-bit grey image saved in the <RID> file format
-	- <RID> file contents:
-		- a 32-bit signed integer h (image height)
-		- a 32-bit signed integer w (image width)
-		- an array of w*h unsigned bytes representing pixel intensities
-	*/
-
 	if (fread(nrows, sizeof(int), 1, file) != 1)
 		return false;
 
@@ -194,8 +208,10 @@ int load_training_data(const char* path)
 		if (fread(&n, sizeof(int), 1, file) != 1)
 			return 1;
 
-		if (!n)
+		if (n == 0)
 			dataset.background.push_back(total_images);
+		else if (n == -1)
+			dataset.negatives.push_back(total_images);
 		else
 		{
 			for (int i = 0; i < n; ++i)
@@ -597,7 +613,7 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 	}
 
 	int t = getticks();
-	int n = 0;
+	int total = 0;
 
 	// TODO: add ALL positives to dataset (or/and export doubtful samples for review)
 	// object samples
@@ -616,11 +632,11 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 			stage_objects->image_idx = obj.image_idx;
 			stage_objects->obj_class = 1;
 			++stage_objects;
-			++n;
+			++total;
 		}
 	}
 
-	*np = n;
+	*np = total;
 	printf("Got %d positive samples\n", *np);
 
 	// non-object samples
@@ -628,8 +644,28 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 	int64_t stop_nw = int64_t(*np) * 10000000;  // 1e-7 fpr
 	*nn = 0;
 
+	// sample hard negatives (i. e. manually given false positives)
+	printf("* sampling hard negatives...\n");
+	for (const auto &obj: dataset.negatives)
+	{
+		// whole image
+		stage_objects->x = 0;
+		stage_objects->y = 0;
+		stage_objects->w = dataset.pdims[obj][1] - 1;
+		stage_objects->h = dataset.pdims[obj][0] - 1;
+		stage_objects->image_idx = obj;
+		stage_objects->obj_class = -1;
+		stage_objects->score = 0;
+		++stage_objects;
+
+		++total;
+		++*nn;
+		nw += 1;
+	}
+	printf("Got %d hard negative samples\n", *nn);
+
 	// TODO: detect negatives instead of random export
-	printf("* sampling negatives\n");
+	printf("* sampling negatives...\n");
 	fflush(stdout);
 	int stop = 0;
 	if (!dataset.background.empty())
@@ -669,7 +705,7 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 							stage_objects->score = 0;
 							++stage_objects;
 
-							++n;
+							++total;
 							++*nn;
 						}
 						else
@@ -700,7 +736,7 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 	float etpr = *np / (float)dataset.objects.size();
 	float efpr = (float)(*nn / (double)nw);
 
-	printf("* sampling finished\n");
+	printf("* sampling finished (totally %d samples)\n", total);
 	printf("	** elapsed time: %.2f s\n", getticks() - t);
 	printf("	** cascade TPR=%.8f (%d/%d)\n", etpr, *np, int(dataset.objects.size()));
 	printf("	** cascade FPR=%.8f (%d/%lld)\n", efpr, *nn, (long long int)nw);
