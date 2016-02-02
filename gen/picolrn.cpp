@@ -673,6 +673,7 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 		#pragma omp parallel
 		{
 			int thid = omp_get_thread_num();
+			int th_nw = 0; // thread-local nw counter
 
 			// data mine hard negatives
 			while (!stop)
@@ -724,6 +725,16 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 
 				if (!stop)
 				{
+					th_nw++;
+					if (th_nw == 1000)
+					{
+						#pragma omp atomic
+						nw += th_nw;
+
+						th_nw = 0;
+					}
+				}
+				else{
 					#pragma omp atomic
 					++nw;
 				}
