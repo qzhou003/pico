@@ -743,7 +743,8 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 				}
 				else{
 					#pragma omp atomic
-					++nw;
+					nw += th_nw;
+					//++nw;
 				}
 			}
 		}  // omp parallel
