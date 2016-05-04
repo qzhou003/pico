@@ -25,7 +25,8 @@
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>
-#include <malloc.h>
+// #include <malloc.h>
+// #include <sys/oneway-malloc/include/malloc.h>
 #include <stdint.h>
 
 struct Detection
