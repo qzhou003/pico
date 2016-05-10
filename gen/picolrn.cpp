@@ -86,12 +86,13 @@ static int cur_stage = 0;
 #include <time.h>
 float getticks()
 {
-	struct timespec ts;
+	// struct timespec ts;
 
-	if(clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
-		return -1.0f;
+	// if(clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
+	// 	return -1.0f;
 
-	return ts.tv_sec + 1e-9f*ts.tv_nsec;
+	// return ts.tv_sec + 1e-9f*ts.tv_nsec;
+	return 0;
 }
 #else
 #include <windows.h>
