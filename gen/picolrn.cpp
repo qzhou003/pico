@@ -727,7 +727,7 @@ float sample_training_data(Detection *stage_objects, int* np, int* nn)
 				{
 					if (nw % 100000 == 0)
 					{
-						printf("%.2lf %ld\r", o, nw);
+						printf("%.2lf %ld %d\r", o, nw,*np);
 						fflush(stdout);
 					}
 				}
