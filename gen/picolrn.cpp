@@ -835,7 +835,7 @@ int main(int argc, char* argv[])
 	bool init_only = false;
 	bool one_stage = false;
 	tsr = 1.0f;  // scale row
-	tsc = 1.0f;  // scale col
+	tsc = 1.5f;  // scale col
 	tdepth = 5;  // tree max depth
 	float tpr = 0;
 	float fpr = 0;
@@ -853,12 +853,14 @@ int main(int argc, char* argv[])
 			++opt_count;
 			if (opt_count < argc)
 				tsr = float(atof(argv[opt_count + 1]));
+			printf("tsr is set to %0.2f",tsr);
 		}
 		else if (std::string(argv[opt_count]) == "--sc")
 		{
 			++opt_count;
 			if (opt_count < argc)
 				tsc = float(atof(argv[opt_count + 1]));
+			printf("tsc is set to %0.2f",tsc);
 		}
 		else if (std::string(argv[opt_count]) == "--depth")
 		{
